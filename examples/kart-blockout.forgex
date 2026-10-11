@@ -1,0 +1,726 @@
+{
+  "format": "forgex-project",
+  "version": 1,
+  "generator": "FORGEX 3D 0.1.0",
+  "savedAt": "2026-10-11T12:00:00.000Z",
+  "units": {
+    "lengthUnit": "meters",
+    "upAxis": "+Y",
+    "forwardAxis": "+Z",
+    "handedness": "right",
+    "rotation": "degrees-xyz"
+  },
+  "settings": {
+    "gridSize": 0.25,
+    "snapEnabled": true,
+    "rotationSnapDegrees": 15
+  },
+  "scene": {
+    "rootIds": [
+      "obj_example01",
+      "obj_example08"
+    ],
+    "objects": [
+      {
+        "id": "obj_example01",
+        "name": "Kart",
+        "kind": "group",
+        "parentId": null,
+        "childIds": [
+          "obj_example02",
+          "obj_example07",
+          "obj_example03",
+          "obj_example04",
+          "obj_example05",
+          "obj_example06"
+        ],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "obj_example02",
+        "name": "Body",
+        "kind": "mesh",
+        "parentId": "obj_example01",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0.55,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.4,
+            0.35,
+            2.4
+          ]
+        },
+        "material": {
+          "color": "#3d9fe8"
+        },
+        "source": {
+          "type": "construction",
+          "vertices": [
+            {
+              "id": "v1",
+              "position": [
+                -0.5,
+                -0.5,
+                -0.5
+              ]
+            },
+            {
+              "id": "v2",
+              "position": [
+                0.5,
+                -0.5,
+                -0.5
+              ]
+            },
+            {
+              "id": "v3",
+              "position": [
+                0.5,
+                -0.5,
+                0.5
+              ]
+            },
+            {
+              "id": "v4",
+              "position": [
+                -0.5,
+                -0.5,
+                0.5
+              ]
+            },
+            {
+              "id": "v5",
+              "position": [
+                -0.5,
+                0.5,
+                -0.5
+              ]
+            },
+            {
+              "id": "v6",
+              "position": [
+                0.5,
+                0.5,
+                -0.5
+              ]
+            },
+            {
+              "id": "v7",
+              "position": [
+                0.5,
+                -0.09999999999999998,
+                0.5
+              ]
+            },
+            {
+              "id": "v8",
+              "position": [
+                -0.5,
+                -0.09999999999999998,
+                0.5
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "id": "e1",
+              "a": "v1",
+              "b": "v2"
+            },
+            {
+              "id": "e2",
+              "a": "v2",
+              "b": "v3"
+            },
+            {
+              "id": "e3",
+              "a": "v3",
+              "b": "v4"
+            },
+            {
+              "id": "e4",
+              "a": "v4",
+              "b": "v1"
+            },
+            {
+              "id": "e5",
+              "a": "v5",
+              "b": "v6"
+            },
+            {
+              "id": "e6",
+              "a": "v6",
+              "b": "v7"
+            },
+            {
+              "id": "e7",
+              "a": "v7",
+              "b": "v8"
+            },
+            {
+              "id": "e8",
+              "a": "v8",
+              "b": "v5"
+            },
+            {
+              "id": "e9",
+              "a": "v1",
+              "b": "v5"
+            },
+            {
+              "id": "e10",
+              "a": "v2",
+              "b": "v6"
+            },
+            {
+              "id": "e11",
+              "a": "v3",
+              "b": "v7"
+            },
+            {
+              "id": "e12",
+              "a": "v4",
+              "b": "v8"
+            }
+          ],
+          "faces": [
+            {
+              "id": "f1",
+              "vertices": [
+                "v1",
+                "v2",
+                "v3",
+                "v4"
+              ]
+            },
+            {
+              "id": "f2",
+              "vertices": [
+                "v1",
+                "v5",
+                "v6",
+                "v2"
+              ]
+            },
+            {
+              "id": "f3",
+              "vertices": [
+                "v1",
+                "v4",
+                "v8",
+                "v5"
+              ]
+            },
+            {
+              "id": "f4",
+              "vertices": [
+                "v2",
+                "v6",
+                "v7",
+                "v3"
+              ]
+            },
+            {
+              "id": "f5",
+              "vertices": [
+                "v3",
+                "v7",
+                "v8",
+                "v4"
+              ]
+            },
+            {
+              "id": "f6",
+              "vertices": [
+                "v5",
+                "v8",
+                "v7",
+                "v6"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "obj_example07",
+        "name": "Seat",
+        "kind": "mesh",
+        "parentId": "obj_example01",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0.85,
+            -0.45
+          ],
+          "rotation": [
+            -12,
+            0,
+            0
+          ],
+          "scale": [
+            0.6,
+            0.35,
+            0.5
+          ]
+        },
+        "material": {
+          "color": "#e0565b"
+        },
+        "source": {
+          "type": "construction",
+          "vertices": [
+            {
+              "id": "v1",
+              "position": [
+                -0.5,
+                -0.5,
+                -0.5
+              ]
+            },
+            {
+              "id": "v2",
+              "position": [
+                0.5,
+                -0.5,
+                -0.5
+              ]
+            },
+            {
+              "id": "v3",
+              "position": [
+                0.5,
+                -0.5,
+                0.5
+              ]
+            },
+            {
+              "id": "v4",
+              "position": [
+                -0.5,
+                -0.5,
+                0.5
+              ]
+            },
+            {
+              "id": "v5",
+              "position": [
+                -0.5,
+                0.5,
+                -0.5
+              ]
+            },
+            {
+              "id": "v6",
+              "position": [
+                0.5,
+                0.5,
+                -0.5
+              ]
+            },
+            {
+              "id": "v7",
+              "position": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            },
+            {
+              "id": "v8",
+              "position": [
+                -0.5,
+                0.5,
+                0.5
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "id": "e1",
+              "a": "v1",
+              "b": "v2"
+            },
+            {
+              "id": "e2",
+              "a": "v2",
+              "b": "v3"
+            },
+            {
+              "id": "e3",
+              "a": "v3",
+              "b": "v4"
+            },
+            {
+              "id": "e4",
+              "a": "v4",
+              "b": "v1"
+            },
+            {
+              "id": "e5",
+              "a": "v5",
+              "b": "v6"
+            },
+            {
+              "id": "e6",
+              "a": "v6",
+              "b": "v7"
+            },
+            {
+              "id": "e7",
+              "a": "v7",
+              "b": "v8"
+            },
+            {
+              "id": "e8",
+              "a": "v8",
+              "b": "v5"
+            },
+            {
+              "id": "e9",
+              "a": "v1",
+              "b": "v5"
+            },
+            {
+              "id": "e10",
+              "a": "v2",
+              "b": "v6"
+            },
+            {
+              "id": "e11",
+              "a": "v3",
+              "b": "v7"
+            },
+            {
+              "id": "e12",
+              "a": "v4",
+              "b": "v8"
+            }
+          ],
+          "faces": [
+            {
+              "id": "f1",
+              "vertices": [
+                "v1",
+                "v2",
+                "v3",
+                "v4"
+              ]
+            },
+            {
+              "id": "f2",
+              "vertices": [
+                "v1",
+                "v5",
+                "v6",
+                "v2"
+              ]
+            },
+            {
+              "id": "f3",
+              "vertices": [
+                "v1",
+                "v4",
+                "v8",
+                "v5"
+              ]
+            },
+            {
+              "id": "f4",
+              "vertices": [
+                "v2",
+                "v6",
+                "v7",
+                "v3"
+              ]
+            },
+            {
+              "id": "f5",
+              "vertices": [
+                "v3",
+                "v7",
+                "v8",
+                "v4"
+              ]
+            },
+            {
+              "id": "f6",
+              "vertices": [
+                "v5",
+                "v8",
+                "v7",
+                "v6"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "obj_example03",
+        "name": "Wheel 1",
+        "kind": "mesh",
+        "parentId": "obj_example01",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.8,
+            0.3,
+            0.85
+          ],
+          "rotation": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.6,
+            0.25,
+            0.6
+          ]
+        },
+        "material": {
+          "color": "#3a4350"
+        },
+        "source": {
+          "type": "primitive",
+          "primitive": "cylinder"
+        }
+      },
+      {
+        "id": "obj_example04",
+        "name": "Wheel 2",
+        "kind": "mesh",
+        "parentId": "obj_example01",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0.8,
+            0.3,
+            0.85
+          ],
+          "rotation": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.6,
+            0.25,
+            0.6
+          ]
+        },
+        "material": {
+          "color": "#3a4350"
+        },
+        "source": {
+          "type": "primitive",
+          "primitive": "cylinder"
+        }
+      },
+      {
+        "id": "obj_example05",
+        "name": "Wheel 3",
+        "kind": "mesh",
+        "parentId": "obj_example01",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.8,
+            0.3,
+            -0.85
+          ],
+          "rotation": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.6,
+            0.25,
+            0.6
+          ]
+        },
+        "material": {
+          "color": "#3a4350"
+        },
+        "source": {
+          "type": "primitive",
+          "primitive": "cylinder"
+        }
+      },
+      {
+        "id": "obj_example06",
+        "name": "Wheel 4",
+        "kind": "mesh",
+        "parentId": "obj_example01",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0.8,
+            0.3,
+            -0.85
+          ],
+          "rotation": [
+            0,
+            0,
+            90
+          ],
+          "scale": [
+            0.6,
+            0.25,
+            0.6
+          ]
+        },
+        "material": {
+          "color": "#3a4350"
+        },
+        "source": {
+          "type": "primitive",
+          "primitive": "cylinder"
+        }
+      },
+      {
+        "id": "obj_example08",
+        "name": "Floor",
+        "kind": "mesh",
+        "parentId": null,
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            8,
+            1,
+            8
+          ]
+        },
+        "material": {
+          "color": "#3a4350"
+        },
+        "source": {
+          "type": "construction",
+          "vertices": [
+            {
+              "id": "v1",
+              "position": [
+                -0.5,
+                0,
+                -0.5
+              ]
+            },
+            {
+              "id": "v2",
+              "position": [
+                -0.5,
+                0,
+                0.5
+              ]
+            },
+            {
+              "id": "v3",
+              "position": [
+                0.5,
+                0,
+                0.5
+              ]
+            },
+            {
+              "id": "v4",
+              "position": [
+                0.5,
+                0,
+                -0.5
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "id": "e1",
+              "a": "v1",
+              "b": "v2"
+            },
+            {
+              "id": "e2",
+              "a": "v2",
+              "b": "v3"
+            },
+            {
+              "id": "e3",
+              "a": "v3",
+              "b": "v4"
+            },
+            {
+              "id": "e4",
+              "a": "v4",
+              "b": "v1"
+            }
+          ],
+          "faces": [
+            {
+              "id": "f1",
+              "vertices": [
+                "v1",
+                "v2",
+                "v3",
+                "v4"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "camera": {
+    "position": [
+      4.6,
+      3.2,
+      5.4
+    ],
+    "target": [
+      0,
+      0.5,
+      0
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "forgex-3d": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/mcp/forgex-mcp.cjs"]
+    }
+  }
+}

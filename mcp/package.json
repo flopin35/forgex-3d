@@ -1,0 +1,6 @@
+{
+  "name": "forgex-3d-mcp",
+  "private": true,
+  "type": "commonjs",
+  "description": "MCP server for FORGEX 3D. Built files in dist/ run on Node.js 20+ with no dependencies."
+}
