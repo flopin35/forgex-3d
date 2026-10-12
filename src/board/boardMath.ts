@@ -28,22 +28,30 @@ export function zoomAt(view: BoardView, sx: number, sy: number, factor: number):
   return { scale, ox: sx - px * scale, oy: sy + py * scale };
 }
 
-/** A view that fits the drawing (or a default 4 m area) into the board with a margin. */
-export function fitView(sketch: Sketch | null, width: number, height: number, mirror: boolean): BoardView {
+/** A box on the board in metres: [minX, minY, maxX, maxY]. */
+export type BoardBox = [number, number, number, number];
+
+/**
+ * A view that fits the drawing and any reference pictures (or a default 4 m area)
+ * into the board with a margin.
+ */
+export function fitView(sketch: Sketch | null, width: number, height: number, mirror: boolean, boxes: readonly BoardBox[] = []): BoardView {
   const points = sketch ? Object.values(sketch.points) : [];
   let minX = -2;
   let maxX = 2;
   let minY = -1;
   let maxY = 2;
-  if (points.length > 0) {
-    const xs = points.flatMap((p) => (mirror ? [p.x, -p.x] : [p.x]));
-    const ys = points.map((p) => p.y);
+  if (points.length > 0 || boxes.length > 0) {
+    const xs = [...points.flatMap((p) => (mirror ? [p.x, -p.x] : [p.x])), ...boxes.flatMap((b) => [b[0], b[2]])];
+    const ys = [...points.map((p) => p.y), ...boxes.flatMap((b) => [b[1], b[3]])];
     minX = Math.min(...xs, 0);
     maxX = Math.max(...xs, 0);
     minY = Math.min(...ys);
     maxY = Math.max(...ys);
-    const padX = Math.max(0.5, (maxX - minX) * 0.25);
-    const padY = Math.max(0.5, (maxY - minY) * 0.25);
+    // Pictures already carry their own white space, so they need less margin than dots.
+    const margin = points.length > 0 ? 0.25 : 0.08;
+    const padX = Math.max(points.length > 0 ? 0.5 : 0.1, (maxX - minX) * margin);
+    const padY = Math.max(points.length > 0 ? 0.5 : 0.1, (maxY - minY) * margin);
     minX -= padX;
     maxX += padX;
     minY -= padY;
@@ -137,4 +145,37 @@ export function lineAt(view: BoardView, sketch: Sketch, sx: number, sy: number, 
 export function metres(value: number): string {
   const rounded = Math.round(value * 1000) / 1000;
   return `${Object.is(rounded, -0) ? 0 : rounded}`;
+}
+
+/**
+ * The line (drawn as a polyline, so curves count) nearest to a screen position within
+ * `radius` pixels, with the closest point on it in plane coordinates.
+ */
+export function pathAt(
+  view: BoardView,
+  paths: ReadonlyMap<string, readonly (readonly [number, number])[]>,
+  sx: number,
+  sy: number,
+  radius = 7,
+): { lineId: string; point: [number, number] } | null {
+  let best: { lineId: string; point: [number, number] } | null = null;
+  let bestDistance = radius;
+  for (const [lineId, points] of paths) {
+    for (let i = 0; i + 1 < points.length; i++) {
+      const [ax, ay] = toScreen(view, points[i][0], points[i][1]);
+      const [bx, by] = toScreen(view, points[i + 1][0], points[i + 1][1]);
+      const dx = bx - ax;
+      const dy = by - ay;
+      const lengthSq = dx * dx + dy * dy;
+      const t = lengthSq === 0 ? 0 : Math.max(0, Math.min(1, ((sx - ax) * dx + (sy - ay) * dy) / lengthSq));
+      const distance = Math.hypot(ax + t * dx - sx, ay + t * dy - sy);
+      if (distance <= bestDistance) {
+        bestDistance = distance;
+        const p = points[i];
+        const q = points[i + 1];
+        best = { lineId, point: [p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])] };
+      }
+    }
+  }
+  return best;
 }

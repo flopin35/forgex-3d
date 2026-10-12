@@ -1,4 +1,5 @@
 import type { ConstructionGraph } from '../geometry/constructionGraph';
+import type { MeshModifiers } from '../geometry/modifiers';
 import { cloneTransform, type Transform } from '../math/transform';
 import {
   indexInParent,
@@ -201,6 +202,39 @@ export class SetSourceCommand implements Command {
   private write(scene: Scene, source: MeshSource): Scene {
     const mesh = requireMesh(scene, this.id);
     return updateObject(scene, this.id, () => ({ ...mesh, source }));
+  }
+
+  apply(scene: Scene): Scene {
+    return this.write(scene, this.after);
+  }
+
+  revert(scene: Scene): Scene {
+    return this.write(scene, this.before);
+  }
+}
+
+/** How a mesh is finished: modifiers (mirror, subdivision) and smooth shading. */
+export interface MeshLook {
+  readonly modifiers: MeshModifiers | undefined;
+  readonly smooth: boolean;
+}
+
+export class SetMeshLookCommand implements Command {
+  constructor(
+    private readonly id: string,
+    private readonly before: MeshLook,
+    private readonly after: MeshLook,
+    readonly label: string,
+  ) {}
+
+  private write(scene: Scene, look: MeshLook): Scene {
+    const mesh = requireMesh(scene, this.id);
+    return updateObject(scene, this.id, () => {
+      const { modifiers: _old, ...rest } = mesh;
+      void _old;
+      const material = look.smooth ? { ...mesh.material, smooth: true } : { color: mesh.material.color };
+      return look.modifiers ? { ...rest, material, modifiers: look.modifiers } : { ...rest, material };
+    });
   }
 
   apply(scene: Scene): Scene {

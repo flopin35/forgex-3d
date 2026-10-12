@@ -2,7 +2,7 @@
 
 A `.forgex` file is a UTF-8 JSON document. It stores the **editable source** of a project (the scene graph and construction graphs), never only the generated triangles, so everything you build can be reopened and edited.
 
-Current version: **2** (version 2 added blueprint sources; version 1 files open unchanged). Reading and validation live in `src/core/project/projectFile.ts`.
+Current version: **3**. Version 2 added blueprints; version 3 added smooth dots, bodies, modifiers, smooth shading and reference pictures. All additions are optional fields, so version 1 and 2 files open unchanged. Reading and validation live in `src/core/project/projectFile.ts`.
 
 ## Top level
 
@@ -16,6 +16,7 @@ Current version: **2** (version 2 added blueprint sources; version 1 files open 
 | `settings` | object | `gridSize` (metres), `snapEnabled`, `rotationSnapDegrees`. Missing settings fall back to defaults with a warning. |
 | `scene` | object | `rootIds` (top-level object ids, in order) and `objects` (all objects, parents before children). |
 | `camera` | object, optional | `position` and `target`, each `[x, y, z]` in metres. |
+| `references` | array, optional | Pictures behind the board to trace over; see below. |
 
 ## World conventions (`units`)
 
@@ -41,7 +42,9 @@ Every object has:
 | `visible` | boolean | |
 | `transform` | object | `position`, `rotation` (degrees), `scale`, each `[x, y, z]`, relative to the parent. |
 
-Meshes also have `material.color` (`#rrggbb`) and a `source`:
+Meshes also have `material` (`color` as `#rrggbb`, and `smooth: true` for smooth shading), optional `modifiers`, and a `source`.
+
+`modifiers` change what is shown and exported, never the source: `{ "mirror": "x", "subdivide": 2 }`. `mirror` (`none`, `x`, `y` or `z`) copies the mesh across that local axis plane and joins the halves (faces lying in the plane are dropped); `subdivide` (0 to 3) applies Catmull-Clark smoothing. Mirror runs first.
 
 ### Parametric primitive
 
@@ -72,17 +75,46 @@ Meshes also have `material.color` (`#rrggbb`) and a `source`:
 {
   "type": "sketch",
   "plane": "front",
-  "points": [{ "id": "p1", "x": 0, "y": 1.6 }, { "id": "p2", "x": 0.08, "y": 1.44 }],
+  "points": [{ "id": "p1", "x": 0, "y": 1.6 }, { "id": "p2", "x": 0.08, "y": 1.44, "smooth": true }],
   "lines": [{ "id": "l1", "a": "p1", "b": "p2" }],
-  "shape": { "mode": "extrude", "depth": 0.06, "segments": 32, "mirror": true }
+  "shape": { "mode": "extrude", "depth": 0.06, "segments": 32, "mirror": true, "axis": "vertical", "curveSteps": 10 }
 }
 ```
 
+- A dot with `smooth: true` bends the lines through it into a curve (Catmull-Rom style: the curve's direction at the dot runs from one neighbour to the other). `curveSteps` is the number of straight pieces per curved line (2 to 48).
+
 - `plane` is `front` (x = +X, y = +Y), `side` (seen from the right: x = −Z, y = +Y) or `top` (seen from above: x = +X, y = −Z). Positions are metres in the object's local space.
 - Closed loops of lines are filled; a loop inside a filled loop is a hole, and a loop inside a hole is filled again. Lines that close nothing stay as lines (extruded, they become thin walls).
-- `shape.mode`: `flat` (a panel), `extrude` (thickness `depth` metres; centred on the plane, except `top` drawings, which grow upwards from the ground), or `revolve` (spun around the vertical axis x = 0 in `segments` steps).
+- `shape.mode`: `flat` (a panel), `extrude` (thickness `depth` metres; centred on the plane, except `top` drawings, which grow upwards from the ground), or `revolve` (spun in `segments` steps around the vertical line x = 0 when `axis` is `vertical`, or around the horizontal line y = 0 when `axis` is `horizontal`, as for a wheel).
 - `shape.mirror` copies the drawing across x = 0; dots on the axis are shared by both halves.
 - Only the drawing is stored. The 3D mesh is generated from it on load, so it always matches.
+
+### Body (lofted from three views)
+
+```json
+{
+  "type": "body",
+  "views": {
+    "side": { "points": [...], "lines": [...] },
+    "top": { "points": [...], "lines": [...] },
+    "front": { "points": [...], "lines": [] }
+  },
+  "body": { "stations": 72, "sectionPoints": 48, "roundness": 4, "symmetric": true, "curveSteps": 10 }
+}
+```
+
+- Each view holds dots and lines like a blueprint, on its own plane (`side`: x = −Z, y = +Y; `top`: x = +X, y = −Z; `front`: x = +X, y = +Y).
+- The largest filled area of the side view gives the height at each point along the length; the top view gives the width; the front view (optional) gives the shape of every slice, scaled to fit. Without a front view, slices are superellipses whose `roundness` runs from 2 (oval) to 12 (boxy).
+- `stations` slices are taken along the length where the side and top views overlap, bunched towards the ends. Each slice has `sectionPoints` points. The ends are capped, so the body is one closed solid.
+- With `symmetric`, the top and front views are mirrored across x = 0 (draw the right half).
+
+## Reference pictures
+
+```json
+{ "id": "ref_1", "plane": "side", "name": "Car side", "src": "data:image/png;base64,...", "aspect": 0.4, "x": 0, "y": 0.9, "width": 4.6, "opacity": 0.5, "flip": false, "visible": true }
+```
+
+The picture is stored inside the project (`src` must be a `data:image/` URL of PNG, JPEG, WebP, GIF or SVG, under 24 MB as text). `x` and `y` are its centre on the board in metres, `width` its width in metres, `aspect` its height divided by width. Invalid pictures are skipped with a warning; they never stop a project from opening.
 
 ## Rules checked on load
 
@@ -91,10 +123,11 @@ The file is rejected, with every problem listed, when:
 - it is not JSON, not a FORGEX project, or from a newer format version;
 - an object id is missing, too long or used twice; a field has the wrong type; a number is not finite; a colour is not `#rrggbb`;
 - the hierarchy is inconsistent: a `parentId` does not match the parent's `childIds`, an object appears twice, an object is unreachable from `rootIds`, or an object is inside itself;
-- a blueprint has a line to a missing dot, a line from a dot to itself, a duplicate id, or an unknown plane or shape mode;
+- a blueprint or body view has a line to a missing dot, a line from a dot to itself, a duplicate id, or an unknown plane or shape mode;
+- `modifiers` has an unknown mirror axis or a subdivision level that is not a number;
 - a construction graph breaks a structural invariant: duplicate ids, an edge to a missing vertex, an edge from a vertex to itself, two edges between the same pair of vertices, or a face that repeats a vertex, has fewer than 3 vertices or has a side with no edge.
 
-These load with a warning instead: faces that are no longer flat, zero-area faces, edges shared by more than two faces, and inconsistent face winding.
+These load with a warning instead, for point-built geometry: faces that are no longer flat, zero-area faces, edges shared by more than two faces, and inconsistent face winding. Generated geometry (blueprints, bodies, modifiers) is rebuilt on load and not checked this way.
 
 ## Saving
 

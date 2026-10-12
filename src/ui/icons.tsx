@@ -113,6 +113,32 @@ const ICONS = {
   fit: <path d="M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5 M9 9h6v6H9Z" />,
   chevronUp: <path d="M6 15l6-6 6 6" />,
   magnet: <path d="M5 4h4v8a3 3 0 0 0 6 0V4h4v8a7 7 0 0 1-14 0Z M5 8h4 M15 8h4" />,
+  car: (
+    <>
+      <path d="M2.8 15.5v-2.6c0-.8.5-1.4 1.2-1.6l3.1-.9 2.4-2.5c.5-.5 1.1-.8 1.8-.8h3.4c.8 0 1.5.4 1.9 1l1.6 2.3 2.2.6c.7.2 1.1.8 1.1 1.5v3h-2.2 M8.6 15.5h6.8 M5.6 15.5H2.8" />
+      <circle cx="7.1" cy="15.6" r="1.7" />
+      <circle cx="16.9" cy="15.6" r="1.7" />
+    </>
+  ),
+  curvePen: (
+    <>
+      <path d="M3.5 19.5c3.5-1 4.5-9 9-11.5s6.5 1.5 8-3" />
+      <circle cx="3.5" cy="19.5" r="1.6" />
+      <circle cx="12.5" cy="8" r="1.6" />
+      <circle cx="20.5" cy="5" r="1.6" />
+    </>
+  ),
+  smooth: (
+    <>
+      <path d="M4 18 9 8l5 10 M14 18c1.2-6 2.8-9 3.5-9s2.3 3 2.5 9" />
+    </>
+  ),
+  image: (
+    <>
+      <path d="M3.5 5h17v14h-17Z M3.5 16l5-5 4 4 2.5-2.5 5.5 5" />
+      <circle cx="15.5" cy="9" r="1.6" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof ICONS;

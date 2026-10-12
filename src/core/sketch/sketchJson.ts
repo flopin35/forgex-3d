@@ -1,20 +1,40 @@
 import { isFiniteNumber } from '../math/vec3';
-import { clampShape, SHAPE_MODES, SKETCH_PLANES, type ShapeMode, type ShapeSettings, type Sketch, type SketchLine, type SketchPlane, type SketchPoint } from './sketch';
+import {
+  clampShape,
+  SHAPE_MODES,
+  SKETCH_PLANES,
+  type ShapeMode,
+  type ShapeSettings,
+  type Sketch,
+  type SketchLine,
+  type SketchPlane,
+  type SketchPoint,
+} from './sketch';
+
+/** The dots and lines of one drawing as written into a .forgex file. */
+export interface SketchViewJson {
+  points: { id: string; x: number; y: number; smooth?: true }[];
+  lines: { id: string; a: string; b: string }[];
+}
 
 /** A blueprint as written into a .forgex file. */
-export interface SketchJson {
+export interface SketchJson extends SketchViewJson {
   plane: SketchPlane;
-  points: { id: string; x: number; y: number }[];
-  lines: { id: string; a: string; b: string }[];
   shape: ShapeSettings;
+}
+
+export function viewToJson(sketch: Sketch): SketchViewJson {
+  return {
+    points: Object.values(sketch.points).map((p) => (p.smooth ? { id: p.id, x: p.x, y: p.y, smooth: true } : { id: p.id, x: p.x, y: p.y })),
+    lines: Object.values(sketch.lines).map((l) => ({ id: l.id, a: l.a, b: l.b })),
+  };
 }
 
 export function sketchToJson(sketch: Sketch, shape: ShapeSettings): SketchJson {
   return {
     plane: sketch.plane,
-    points: Object.values(sketch.points).map((p) => ({ id: p.id, x: p.x, y: p.y })),
-    lines: Object.values(sketch.lines).map((l) => ({ id: l.id, a: l.a, b: l.b })),
-    shape: { mode: shape.mode, depth: shape.depth, segments: shape.segments, mirror: shape.mirror },
+    ...viewToJson(sketch),
+    shape: { ...shape },
   };
 }
 
@@ -36,15 +56,10 @@ function nextCounter(ids: Iterable<string>, prefix: string): number {
   return max + 1;
 }
 
-/** Reads a blueprint from file data. Problems go into `errors`; returns null if there were any. */
-export function sketchFromJson(raw: unknown, path: string, errors: string[]): { sketch: Sketch; shape: ShapeSettings } | null {
+/** Reads the dots and lines of one drawing. Problems go into `errors`; returns null if there were any. */
+export function viewFromJson(raw: unknown, plane: SketchPlane, path: string, errors: string[]): Sketch | null {
   const start = errors.length;
-  if (!isRecord(raw)) {
-    errors.push(`${path} must describe a blueprint.`);
-    return null;
-  }
-  if (!SKETCH_PLANES.includes(raw.plane as SketchPlane)) errors.push(`${path}.plane must be one of: ${SKETCH_PLANES.join(', ')}.`);
-  if (!Array.isArray(raw.points) || !Array.isArray(raw.lines)) {
+  if (!isRecord(raw) || !Array.isArray(raw.points) || !Array.isArray(raw.lines)) {
     errors.push(`${path} needs points and lines lists.`);
     return null;
   }
@@ -54,7 +69,8 @@ export function sketchFromJson(raw: unknown, path: string, errors: string[]): { 
     if (!isRecord(item) || !isId(item.id)) return void errors.push(`${at} needs a text id.`);
     if (points[item.id]) return void errors.push(`${at}: dot id ${item.id} is used twice.`);
     if (!isFiniteNumber(item.x) || !isFiniteNumber(item.y)) return void errors.push(`${at}: x and y must be finite numbers.`);
-    points[item.id] = { id: item.id, x: item.x, y: item.y };
+    if (item.smooth !== undefined && typeof item.smooth !== 'boolean') return void errors.push(`${at}: smooth must be true or false.`);
+    points[item.id] = item.smooth ? { id: item.id, x: item.x, y: item.y, smooth: true } : { id: item.id, x: item.x, y: item.y };
   });
   const lines: Record<string, SketchLine> = {};
   const pairs = new Set<string>();
@@ -70,16 +86,21 @@ export function sketchFromJson(raw: unknown, path: string, errors: string[]): { 
     pairs.add(key);
     lines[item.id] = { id: item.id, a, b };
   });
+  if (errors.length > start) return null;
+  return { plane, points, lines, counters: { point: nextCounter(Object.keys(points), 'p'), line: nextCounter(Object.keys(lines), 'l') } };
+}
+
+/** Reads a blueprint from file data. Problems go into `errors`; returns null if there were any. */
+export function sketchFromJson(raw: unknown, path: string, errors: string[]): { sketch: Sketch; shape: ShapeSettings } | null {
+  const start = errors.length;
+  if (!isRecord(raw)) {
+    errors.push(`${path} must describe a blueprint.`);
+    return null;
+  }
+  if (!SKETCH_PLANES.includes(raw.plane as SketchPlane)) errors.push(`${path}.plane must be one of: ${SKETCH_PLANES.join(', ')}.`);
+  const sketch = viewFromJson(raw, (raw.plane as SketchPlane) ?? 'front', path, errors);
   const shapeRaw = isRecord(raw.shape) ? raw.shape : {};
   if (!SHAPE_MODES.includes(shapeRaw.mode as ShapeMode)) errors.push(`${path}.shape.mode must be one of: ${SHAPE_MODES.join(', ')}.`);
-  if (errors.length > start) return null;
-  return {
-    sketch: {
-      plane: raw.plane as SketchPlane,
-      points,
-      lines,
-      counters: { point: nextCounter(Object.keys(points), 'p'), line: nextCounter(Object.keys(lines), 'l') },
-    },
-    shape: clampShape(shapeRaw as unknown as ShapeSettings),
-  };
+  if (errors.length > start || !sketch) return null;
+  return { sketch, shape: clampShape(shapeRaw as Partial<ShapeSettings>) };
 }

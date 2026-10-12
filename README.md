@@ -2,6 +2,17 @@
 
 A personal Windows 3D modelling studio for game assets. **Draw on the blueprint board on the left: click to place dots, each one joined to the last by a line. Close the outline and the 3D object builds itself on the right**, live, as you draw. Save editable `.forgex` projects and export `.glb` models for Blender and Roblox Studio.
 
+## Cars and other complex models
+
+FORGEX 3D opens with a ready-made **supercar**, and **Create > Luxury saloon** adds a long limousine. Every part is a drawing you can reshape, so they are starting points, not fixed models.
+
+- **Bodies from three views** (car button on the board, or Create > Body): draw the **Side** view (the silhouette, front on the left), the **Top** view (the outline from above) and, if you like, the **Front** view (the shape of a slice). FORGEX lofts them into one smooth, closed solid, the way car designers work from blueprints. Notches cut up into the bottom of the side outline become **wheel arches**. With **Symmetric** on, draw only the right half of the top and front views. Dashed purple guides show where the other views reach, so the three stay in proportion.
+- **Curves:** the **curve pen (C)** places smooth dots, and lines bend through them. With the pick tool, **S** turns picked dots smooth or sharp. Smooth dots are circles on the board, sharp corners are squares.
+- **Reference pictures:** **Pictures** on the board puts a blueprint image (a car seen from the side, the top or the front) behind the drawing to trace over. Set its width to the real length, fade it, flip it, and drag it into line.
+- **Finish:** **Smooth shading** makes curved surfaces look round while sharp creases stay sharp. **Subdivide** (1 to 3) rounds any mesh with Catmull-Clark smoothing, which turns blocky point-built shapes into organic ones (box modelling: press Tab and move the orange cage points; the smooth surface follows). **Mirror** (point-built meshes) lets you model one half.
+- **Wheels:** a blueprint set to **Revolve** around the **wheel axle** spins a tyre profile around the horizontal line.
+- Build a car from several parts: a body, a cabin (a second body in dark glass), revolved tyres and rims, extruded spokes, lights and grilles. The templates show exactly this.
+
 ## The board and the 3D view
 
 - **Draw (D):** click to place a dot; every new dot is joined to the previous one. Click the first dot (or any dot already in the drawing) to close the shape, and it fills in. Esc, Enter, right-click or a double-click stops the line. Click a line to put a dot on it. Drag a dot to move it; drop it on another dot to join them.
@@ -14,7 +25,7 @@ A personal Windows 3D modelling studio for game assets. **Draw on the blueprint 
 - **Turntable (T)** spins the 3D view; **Export** writes a `.glb` (File menu or Ctrl+E).
 - Pan the board with the middle or right mouse button, or hold Space and drag; zoom with the wheel. Drag the divider to give the board or the 3D view more room.
 
-The app opens with an example: a mirrored, extruded sword.
+`examples/supercar.forgex` and `examples/luxury-saloon.forgex` are the two cars as projects, and `examples/supercar.glb` is the supercar exported for Blender or Roblox Studio. `examples/sword.forgex` is a simpler start: a mirrored, extruded sword.
 
 ## Also in the editor
 
@@ -36,7 +47,7 @@ Not yet built, and not faked in the UI: connectors and snapping between componen
 
 ## AI assistants (MCP)
 
-FORGEX 3D has its own MCP server, so Claude, Codex or VS Code can build in it: draw blueprints (`create_blueprint`, `edit_blueprint`), add parts, construct meshes from points, edit vertices, check geometry and save projects. With the app open, the AI works live in your viewport (status bar: **AI linked**) and can take viewport images. With the app closed, it edits `.forgex` files directly. Setup for each client: [docs/mcp.md](docs/mcp.md).
+FORGEX 3D has its own MCP server, so Claude, Codex or VS Code can build in it: draw blueprints (`create_blueprint`, `edit_blueprint`), loft car bodies from three views (`create_body`), add ready-made cars (`add_template`), smooth and mirror meshes (`set_modifiers`), add parts, construct meshes from points, edit vertices, check geometry and save projects. With the app open, the AI works live in your viewport (status bar: **AI linked**) and can take viewport images. With the app closed, it edits `.forgex` files directly. Setup for each client: [docs/mcp.md](docs/mcp.md).
 
 ## Set up on Windows
 
@@ -74,7 +85,8 @@ Board:
 
 | Input | Action |
 | --- | --- |
-| D / V / B / O | Draw, Pick, Rectangle, Circle |
+| D / C / V / B / O | Draw corners, Draw curves, Pick, Rectangle, Circle |
+| S | Make picked dots smooth or sharp |
 | Click | Place a dot (Draw) or pick a dot or line (Pick) |
 | Esc, Enter, right-click, double-click | Stop the current line |
 | Shift while drawing | 45° steps |
@@ -94,7 +106,7 @@ Board:
 | Mouse wheel | Zoom |
 | Click the axis cube (bottom right) | Look along that axis |
 | Q / W / E / R | Select / Move / Rotate / Scale tool |
-| Tab | Edit points of the selected Cube or Plane |
+| Tab | Edit points of a point-built object (with Subdivide on, its orange cage) |
 | F | Frame the selection |
 | Delete | Delete picked dots, otherwise the selected object and its children |
 | T | Turntable spin |

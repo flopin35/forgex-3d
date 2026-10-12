@@ -1,4 +1,5 @@
 import { createBlueprintObject, createPartObject } from '../scene/parts';
+import { createTemplate } from '../scene/templates';
 import type { Scene, SceneObject } from '../scene/types';
 import { addPolyline, createSketch } from '../sketch/sketch';
 import { DEFAULT_SETTINGS, type ProjectDocument } from './projectFile';
@@ -6,7 +7,7 @@ import { DEFAULT_SETTINGS, type ProjectDocument } from './projectFile';
 function documentWith(objects: SceneObject[]): ProjectDocument {
   const scene: Scene = {
     objects: Object.fromEntries(objects.map((object) => [object.id, object])),
-    rootIds: objects.map((object) => object.id),
+    rootIds: objects.filter((object) => object.parentId === null).map((object) => object.id),
   };
   return { scene, settings: { ...DEFAULT_SETTINGS }, camera: null };
 }
@@ -45,4 +46,9 @@ export function createStarterDocument(): ProjectDocument {
     color: '#9fc3e8',
   });
   return documentWith([sword]);
+}
+
+/** What the app opens with: a ready-made supercar whose body, cabin and wheels are all drawings. */
+export function createCarDocument(): ProjectDocument {
+  return { ...documentWith(createTemplate('supercar')), camera: { position: [-5.7, 3.1, 8.2], target: [0.7, 0.5, 0.6] } };
 }

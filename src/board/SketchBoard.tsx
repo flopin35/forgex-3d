@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
-import { BOARD_SNAP_SIZES, boardStore, type BoardTool } from '../app/boardState';
+import { BOARD_SNAP_SIZES, boardStore, isPenTool, type BoardTool } from '../app/boardState';
+import { drawingOf, isDrawn, type ActiveDrawing, type DrawnObject } from '../app/drawing';
 import { useActions, useEditor } from '../app/EditorContext';
-import type { EditorState } from '../core/editor/editorStore';
-import { isSketchMesh, type MeshObject, type MeshSource } from '../core/scene/types';
+import type { MeshSource } from '../core/scene/types';
+import { bodyExtents, BODY_VIEWS, generateBody, type BodyView } from '../core/sketch/body';
 import { findRegions, resolveSketch } from '../core/sketch/regions';
 import {
   addLine,
   addPoint,
   addPolyline,
   AXIS_EPSILON,
-  closestOnLine,
   createSketch,
   linesBetween,
   mergePoints,
@@ -24,9 +24,10 @@ import {
 } from '../core/sketch/sketch';
 import { metersToStuds } from '../core/units';
 import { Icon, type IconName } from '../ui/icons';
-import { dotAt, fitView, lineAt, metres, snapPoint, toPlane, toScreen, zoomAt, type BoardView } from './boardMath';
+import { dotAt, fitView, metres, pathAt, snapPoint, toPlane, toScreen, zoomAt, type BoardBox, type BoardView } from './boardMath';
+import { ReferencePanel } from './ReferencePanel';
 
-type Blueprint = MeshObject & { source: Extract<MeshSource, { type: 'sketch' }> };
+type P = [number, number];
 
 /** Where the pointer is on the board, after snapping. */
 interface Hover {
@@ -49,10 +50,12 @@ type Gesture =
   | {
       kind: 'dots';
       objectId: string;
+      view: BodyView | null;
       ids: string[];
-      anchor: [number, number];
-      grab: [number, number];
+      anchor: P;
+      grab: P;
       before: MeshSource;
+      base: Sketch;
       sx0: number;
       sy0: number;
       moved: boolean;
@@ -62,14 +65,16 @@ type Gesture =
     }
   | { kind: 'marquee'; sx0: number; sy0: number; additive: boolean }
   | { kind: 'rect'; x0: number; y0: number }
-  | { kind: 'circle'; cx: number; cy: number };
+  | { kind: 'circle'; cx: number; cy: number }
+  | { kind: 'reference'; id: string; px0: number; py0: number; x0: number; y0: number };
 
 type Preview =
   | { kind: 'marquee'; x: number; y: number; width: number; height: number }
-  | { kind: 'shape'; points: [number, number][] };
+  | { kind: 'shape'; points: P[] };
 
 const TOOLS: { tool: BoardTool; label: string; key: string; icon: IconName }[] = [
-  { tool: 'draw', label: 'Draw dots and lines', key: 'D', icon: 'pen' },
+  { tool: 'draw', label: 'Draw corners: dots joined by straight lines', key: 'D', icon: 'pen' },
+  { tool: 'curve', label: 'Draw curves: smooth dots, lines bend through them', key: 'C', icon: 'curvePen' },
   { tool: 'select', label: 'Pick and move dots', key: 'V', icon: 'select' },
   { tool: 'rectangle', label: 'Rectangle', key: 'B', icon: 'rectangle' },
   { tool: 'circle', label: 'Circle', key: 'O', icon: 'circle' },
@@ -77,23 +82,24 @@ const TOOLS: { tool: BoardTool; label: string; key: string; icon: IconName }[] =
 
 const PLANE_INFO: Record<SketchPlane, { label: string; caption: string; title: string }> = {
   front: { label: 'Front', caption: 'Front view · X right · Y up', title: 'Draw what you see from the front. Thickness goes front to back.' },
-  side: { label: 'Side', caption: 'Right side view · back is right · Y up', title: 'Draw what you see from the right side. Thickness goes left to right.' },
-  top: { label: 'Top', caption: 'Top view · X right · back is up', title: 'Draw a plan seen from above. Thickness grows upwards from the ground.' },
+  side: { label: 'Side', caption: 'Side view · front of the object on the left · Y up', title: 'Draw what you see from the right side. Thickness goes left to right.' },
+  top: { label: 'Top', caption: 'Top view · X right · front of the object at the bottom', title: 'Draw a plan seen from above. Thickness grows upwards from the ground.' },
+};
+
+const VIEW_HELP: Record<BodyView, string> = {
+  side: 'Side view: click round the silhouette seen from the side, front on the left. Notches in the bottom edge make wheel arches.',
+  top: 'Top view: the outline seen from above, front at the bottom. With Symmetric on, draw the right half from the centre line round to the centre line.',
+  front: 'Front view (optional): the shape of a slice through the body. With Symmetric on, draw the right half. Without it, slices are rounded boxes.',
 };
 
 const CLICK_SLOP = 4;
 const GUIDE_PX = 7;
 
-function selectBlueprint(state: EditorState): Blueprint | null {
-  const object = state.selectedId ? state.scene.objects[state.selectedId] : undefined;
-  return isSketchMesh(object) ? object : null;
-}
-
 function isTyping(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 }
 
-function pathOf(points: readonly [number, number][], close: boolean): string {
+function pathOf(points: readonly (readonly [number, number])[], close: boolean): string {
   return points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ') + (close ? ' Z' : '');
 }
 
@@ -101,15 +107,22 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
+/** Display label for a drawn object in the picker: "Supercar › Body". */
+function labelOf(object: DrawnObject, objects: Readonly<Record<string, { name: string }>>): string {
+  const parent = object.parentId ? objects[object.parentId] : undefined;
+  return `${parent ? `${parent.name} › ` : ''}${object.name}`;
+}
+
 /**
  * The blueprint board: click to place dots, each joined to the last by a line. Closed
- * outlines fill in, and the selected blueprint updates live in the 3D view.
+ * outlines fill in, and the selected blueprint or body updates live in the 3D view.
  */
 export function SketchBoard() {
   const actions = useActions();
   const board = useSyncExternalStore(boardStore.subscribe, boardStore.getState);
-  const blueprint = useEditor(selectBlueprint);
+  const selected = useEditor((s) => (s.selectedId ? s.scene.objects[s.selectedId] ?? null : null));
   const scene = useEditor((s) => s.scene);
+  const references = useEditor((s) => s.references);
   const hostRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -122,27 +135,26 @@ export function SketchBoard() {
   const gestureRef = useRef<Gesture | null>(null);
   const spaceRef = useRef(false);
   const overBoardRef = useRef(false);
-  // The blueprint the board has adopted (fitted the view to, cleared picks for).
+  // The drawing the board has adopted (fitted the view to, cleared picks for).
   const adoptedRef = useRef<string | null | undefined>(undefined);
   const needsFitRef = useRef(true);
 
-  const sketch = blueprint?.source.sketch ?? null;
-  const shape = blueprint?.source.shape ?? null;
-  const plane = sketch?.plane ?? board.newPlane;
-  const revolve = shape?.mode === 'revolve';
-  const showAxis = !!shape && (shape.mirror || revolve);
+  const drawing = useMemo(() => drawingOf(selected, board.bodyView), [selected, board.bodyView]);
+  const sketch = drawing?.sketch ?? null;
+  const object = drawing?.object ?? null;
+  const isBody = object?.source.type === 'body';
+  const plane: SketchPlane = drawing ? drawing.sketch.plane : board.newPlane;
+  const revolveAxis = drawing?.revolveAxis ?? null;
+  const showVerticalAxis = !!drawing && (drawing.mirror || revolveAxis === 'vertical');
 
   const setView = (next: BoardView) => {
     viewRef.current = next;
     setViewState(next);
   };
 
-  const blueprints = useMemo(
-    () => Object.values(scene.objects).filter((object): object is Blueprint => isSketchMesh(object)),
-    [scene],
-  );
+  const drawn = useMemo(() => Object.values(scene.objects).filter((o): o is DrawnObject => isDrawn(o)), [scene]);
 
-  // -- Sizing, fitting and adopting the selected blueprint ------------------------------
+  // -- Sizing, fitting and adopting the selected drawing --------------------------------
 
   useEffect(() => {
     const host = hostRef.current;
@@ -154,24 +166,54 @@ export function SketchBoard() {
     return () => observer.disconnect();
   }, []);
 
-  const blueprintId = blueprint?.id ?? null;
+  const drawingKey = object ? `${object.id}:${drawing?.view ?? ''}` : null;
   useEffect(() => {
-    if (adoptedRef.current === blueprintId) return;
-    adoptedRef.current = blueprintId;
+    if (adoptedRef.current === drawingKey) return;
+    adoptedRef.current = drawingKey;
     needsFitRef.current = true;
     boardStore.set({ chainFrom: null, selectedPoints: [], selectedLines: [] });
-  }, [blueprintId]);
+  }, [drawingKey]);
+
+  /** Where this view's visible reference pictures sit on the board, and where the body's other views reach. */
+  const referenceBoxes = (): BoardBox[] => {
+    const boxes: BoardBox[] = actions.store
+      .getState()
+      .references.filter((r) => r.plane === (drawing?.sketch.plane ?? board.newPlane) && r.visible)
+      .map((r) => [r.x - r.width / 2, r.y - (r.width * r.aspect) / 2, r.x + r.width / 2, r.y + (r.width * r.aspect) / 2]);
+    const xs = guides.filter((g) => g.axis === 'x').map((g) => g.value);
+    const ys = guides.filter((g) => g.axis === 'y').map((g) => g.value);
+    if (xs.length || ys.length) {
+      const spanX = xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
+      const spanY = ys.length ? Math.max(...ys) - Math.min(...ys) : 0;
+      // An empty view still shows the room the other views have set out for it.
+      boxes.push([
+        xs.length ? Math.min(...xs) : -spanY * 0.25,
+        ys.length ? Math.min(...ys) : 0,
+        xs.length ? Math.max(...xs) : spanY * 0.25,
+        ys.length ? Math.max(...ys) : spanX * 0.3,
+      ]);
+    }
+    return boxes;
+  };
 
   useEffect(() => {
     if (!needsFitRef.current || size.width === 0 || size.height === 0) return;
     needsFitRef.current = false;
-    // Only refit when a different blueprint is adopted or the board first gets a size.
-    setView(fitView(sketch, size.width, size.height, showAxis));
-  }, [blueprintId, size.width, size.height]);
+    setView(fitView(sketch, size.width, size.height, !!drawing?.mirror, referenceBoxes()));
+    // Only refit when a different drawing is adopted or the board first gets a size.
+  }, [drawingKey, size.width, size.height]);
 
   const fit = () => {
-    if (size.width && size.height) setView(fitView(sketch, size.width, size.height, showAxis));
+    if (size.width && size.height) setView(fitView(sketch, size.width, size.height, !!drawing?.mirror, referenceBoxes()));
   };
+
+  // A newly added picture is shown whole, so it can be traced edge to edge.
+  const referenceCount = references.length;
+  const lastReferenceCount = useRef(referenceCount);
+  useEffect(() => {
+    if (referenceCount > lastReferenceCount.current) fit();
+    lastReferenceCount.current = referenceCount;
+  }, [referenceCount]);
 
   // -- Wheel zoom and space-to-pan ---------------------------------------------------------
 
@@ -211,15 +253,61 @@ export function SketchBoard() {
     };
   }, []);
 
+  // -- Resolved drawing: curves, mirror copies and filled areas ---------------------------------
+
+  const resolved = useMemo(() => (sketch && drawing ? resolveSketch(sketch, drawing.mirror, drawing.curveSteps) : null), [sketch, drawing]);
+  const linePaths = useMemo(() => {
+    const map = new Map<string, P[]>();
+    resolved?.paths.forEach((path) => {
+      if (path.lineId) map.set(path.lineId, path.points);
+    });
+    return map;
+  }, [resolved]);
+  const linePathsRef = useRef(linePaths);
+  linePathsRef.current = linePaths;
+
+  const ghostPaths = useMemo(() => {
+    if (!resolved) return [];
+    if (revolveAxis === 'horizontal') return resolved.paths.map((path) => path.points.map(([x, y]) => [x, -y] as P));
+    return resolved.paths.filter((path) => path.lineId === null).map((path) => path.points);
+  }, [resolved, revolveAxis]);
+
+  const regions = useMemo(() => {
+    if (!sketch || !drawing || drawing.revolveAxis) return [];
+    const forFill = drawing.fillMirror === drawing.mirror && resolved ? resolved : resolveSketch(sketch, drawing.fillMirror, drawing.curveSteps);
+    return findRegions(forFill).map((region) => [region.outer, ...region.holes].map((loop) => loop.map((id) => forFill.points.get(id)!)));
+  }, [sketch, drawing, resolved]);
+
+  /** Lines showing where the body's other views reach, to keep the three views in proportion. */
+  const guides = useMemo(() => {
+    if (!object || object.source.type !== 'body' || !drawing?.view) return [];
+    const extents = bodyExtents(object.source.views, object.source.body);
+    const out: { axis: 'x' | 'y'; value: number; label: string }[] = [];
+    const add = (axis: 'x' | 'y', range: [number, number] | undefined, label: string, map: (v: number) => number) => {
+      if (!range) return;
+      out.push({ axis, value: map(range[0]), label }, { axis, value: map(range[1]), label });
+    };
+    if (drawing.view === 'side') {
+      add('x', extents.top?.z, 'Top view length', (z) => -z);
+    } else if (drawing.view === 'top') {
+      add('y', extents.side?.z, 'Side view length', (z) => -z);
+    } else {
+      add('x', extents.top?.x, 'Top view width', (x) => x);
+      add('y', extents.side?.y, 'Side view height', (y) => y);
+    }
+    return out;
+  }, [object, drawing]);
+
+  const bodyStatus = useMemo(() => (object?.source.type === 'body' ? generateBody(object.source.views, object.source.body) : null), [object]);
+
   // -- Hit testing and snapping ----------------------------------------------------------------
 
   /** Finds what is under a board position and where a new dot would go. */
   const locate = (sx: number, sy: number, shift: boolean, skip?: ReadonlySet<string>): Hover => {
     const v = viewRef.current;
     const state = boardStore.getState();
-    const active = actions.activeBlueprint();
-    const current = active?.source.sketch ?? null;
-    const axisSnap = !!active && (active.source.shape.mirror || active.source.shape.mode === 'revolve');
+    const active = actions.activeDrawing();
+    const current = active?.sketch ?? null;
     const empty = { sx, sy, dot: null, line: null, guideX: null, guideY: null };
 
     if (current) {
@@ -228,20 +316,22 @@ export function SketchBoard() {
         const p = current.points[dot];
         return { ...empty, x: p.x, y: p.y, dot };
       }
-      if (!skip && (state.tool === 'draw' || state.tool === 'select')) {
-        const line = lineAt(v, current, sx, sy);
-        if (line) {
-          const [rx, ry] = toPlane(v, sx, sy);
-          const [x, y] = closestOnLine(current, line, rx, ry);
-          return { ...empty, x, y, line };
-        }
+      if (!skip && (isPenTool(state.tool) || state.tool === 'select')) {
+        const hit = pathAt(v, linePathsRef.current, sx, sy);
+        if (hit && current.lines[hit.lineId]) return { ...empty, x: hit.point[0], y: hit.point[1], line: hit.lineId };
       }
     }
 
     const [rx, ry] = toPlane(v, sx, sy);
-    const chain = state.tool === 'draw' && state.chainFrom && current?.points[state.chainFrom];
-    const angleFrom: [number, number] | null = shift && chain ? [chain.x, chain.y] : null;
-    let [x, y] = snapPoint(v, rx, ry, { gridSize: state.snapSize, snapToGrid: state.snap, snapToAxis: axisSnap, angleFrom });
+    const chain = isPenTool(state.tool) && state.chainFrom && current?.points[state.chainFrom];
+    const angleFrom: P | null = shift && chain ? [chain.x, chain.y] : null;
+    let [x, y] = snapPoint(v, rx, ry, {
+      gridSize: state.snapSize,
+      snapToGrid: state.snap,
+      snapToAxis: !!active && (active.mirror || active.revolveAxis === 'vertical'),
+      angleFrom,
+    });
+    if (active?.revolveAxis === 'horizontal' && Math.abs(y) * v.scale < 10) y = 0;
     let guideX: number | null = null;
     let guideY: number | null = null;
     if (current && !angleFrom) {
@@ -265,7 +355,7 @@ export function SketchBoard() {
     return { ...empty, x, y, guideX, guideY };
   };
 
-  const pointerPosition = (event: { clientX: number; clientY: number }): [number, number] => {
+  const pointerPosition = (event: { clientX: number; clientY: number }): P => {
     const rect = svgRef.current!.getBoundingClientRect();
     return [event.clientX - rect.left, event.clientY - rect.top];
   };
@@ -274,15 +364,18 @@ export function SketchBoard() {
 
   /** Adopts a blueprint the board itself just created, so the view does not jump. */
   const adopt = (id: string) => {
-    adoptedRef.current = id;
+    adoptedRef.current = `${id}:`;
     needsFitRef.current = false;
   };
 
+  const commit = (active: ActiveDrawing, next: Sketch, label: string) => actions.editDrawing(active.object.id, active.view, next, label);
+
   const drawClick = (h: Hover) => {
     const state = boardStore.getState();
-    const active = actions.activeBlueprint();
+    const smooth = state.tool === 'curve';
+    const active = actions.activeDrawing();
     if (!active) {
-      const added = addPoint(createSketch(state.newPlane), h.x, h.y);
+      const added = addPoint(createSketch(state.newPlane), h.x, h.y, smooth);
       const id = actions.createBlueprint(added.sketch);
       if (id) {
         adopt(id);
@@ -290,7 +383,7 @@ export function SketchBoard() {
       }
       return;
     }
-    const current = active.source.sketch;
+    const current = active.sketch;
     const from = state.chainFrom && current.points[state.chainFrom] ? state.chainFrom : null;
 
     if (h.dot) {
@@ -304,7 +397,7 @@ export function SketchBoard() {
       }
       const joinsDrawing = pointDegree(current, h.dot) > 0;
       const joined = addLine(current, from, h.dot);
-      if (joined.created) actions.editBlueprint(active.id, joined.sketch, `Connect ${from} to ${h.dot}`);
+      if (joined.created) commit(active, joined.sketch, `Connect ${from} to ${h.dot}`);
       // Reaching a dot that is already part of the drawing closes the shape: stop there.
       boardStore.set({ chainFrom: joinsDrawing ? null : h.dot });
       return;
@@ -313,26 +406,26 @@ export function SketchBoard() {
     if (h.line) {
       const split = splitLine(current, h.line, h.x, h.y);
       const next = from ? addLine(split.sketch, from, split.pointId).sketch : split.sketch;
-      actions.editBlueprint(active.id, next, from ? 'Connect to a line' : 'Add a dot on a line');
+      commit(active, next, from ? 'Connect to a line' : 'Add a dot on a line');
       boardStore.set({ chainFrom: from ? null : split.pointId });
       return;
     }
 
-    const added = addPoint(current, h.x, h.y);
+    const added = addPoint(current, h.x, h.y, smooth);
     const next = from ? addLine(added.sketch, from, added.pointId).sketch : added.sketch;
-    actions.editBlueprint(active.id, next, from ? 'Draw a line' : 'Place a dot');
+    commit(active, next, from ? (smooth ? 'Draw a curve' : 'Draw a line') : 'Place a dot');
     boardStore.set({ chainFrom: added.pointId });
   };
 
-  const addShape = (points: [number, number][], label: string) => {
+  const addShape = (points: P[], label: string, smooth = false) => {
     const state = boardStore.getState();
-    const active = actions.activeBlueprint();
+    const active = actions.activeDrawing();
     if (!active) {
-      const id = actions.createBlueprint(addPolyline(createSketch(state.newPlane), points, true).sketch, label);
+      const id = actions.createBlueprint(addPolyline(createSketch(state.newPlane), points, true, smooth).sketch, label);
       if (id) adopt(id);
       return;
     }
-    actions.editBlueprint(active.id, addPolyline(active.source.sketch, points, true).sketch, label);
+    commit(active, addPolyline(active.sketch, points, true, smooth).sketch, label);
   };
 
   // -- Pointer gestures ------------------------------------------------------------------------
@@ -348,14 +441,21 @@ export function SketchBoard() {
       return;
     }
     if (event.button !== 0) return;
-    const h = locate(sx, sy, event.shiftKey);
-    const active = actions.activeBlueprint();
 
-    if (state.tool === 'draw') {
-      gestureRef.current =
-        h.dot && active
-          ? dragDots(active, [h.dot], sx, sy, h)
-          : { kind: 'press', sx0: sx, sy0: sy, click: h };
+    if (state.adjustingReference) {
+      const reference = actions.store.getState().references.find((r) => r.id === state.adjustingReference);
+      if (reference) {
+        const [px, py] = toPlane(viewRef.current, sx, sy);
+        gestureRef.current = { kind: 'reference', id: reference.id, px0: px, py0: py, x0: reference.x, y0: reference.y };
+        return;
+      }
+    }
+
+    const h = locate(sx, sy, event.shiftKey);
+    const active = actions.activeDrawing();
+
+    if (isPenTool(state.tool)) {
+      gestureRef.current = h.dot && active ? dragDots(active, [h.dot], sx, sy, h) : { kind: 'press', sx0: sx, sy0: sy, click: h };
       return;
     }
 
@@ -375,10 +475,10 @@ export function SketchBoard() {
         if (picked) {
           const ids = new Set(points);
           for (const id of lines) {
-            const line = active.source.sketch.lines[id];
+            const line = active.sketch.lines[id];
             if (line) ids.add(line.a).add(line.b);
           }
-          const anchorId = h.dot ?? active.source.sketch.lines[h.line!].a;
+          const anchorId = h.dot ?? active.sketch.lines[h.line!].a;
           gestureRef.current = dragDots(active, [...ids], sx, sy, null, anchorId);
         }
         return;
@@ -394,23 +494,18 @@ export function SketchBoard() {
     gestureRef.current = { kind: 'circle', cx: h.x, cy: h.y };
   };
 
-  function dragDots(
-    active: Blueprint,
-    ids: string[],
-    sx: number,
-    sy: number,
-    click: Hover | null,
-    anchorId = ids[0],
-  ): Gesture {
-    const anchorPoint = active.source.sketch.points[anchorId];
+  function dragDots(active: ActiveDrawing, ids: string[], sx: number, sy: number, click: Hover | null, anchorId = ids[0]): Gesture {
+    const anchorPoint = active.sketch.points[anchorId];
     const [rx, ry] = toPlane(viewRef.current, sx, sy);
     return {
       kind: 'dots',
-      objectId: active.id,
+      objectId: active.object.id,
+      view: active.view,
       ids,
       anchor: [anchorPoint.x, anchorPoint.y],
       grab: [anchorPoint.x - rx, anchorPoint.y - ry],
-      before: active.source,
+      before: active.object.source,
+      base: active.sketch,
       sx0: sx,
       sy0: sy,
       moved: false,
@@ -437,7 +532,7 @@ export function SketchBoard() {
         return;
       }
       case 'press': {
-        // Dragging empty board with the draw tool pans instead of placing a dot.
+        // Dragging empty board with a pen pans instead of placing a dot.
         if (Math.hypot(sx - gesture.sx0, sy - gesture.sy0) < CLICK_SLOP) return;
         gestureRef.current = { kind: 'pan', sx0: gesture.sx0, sy0: gesture.sy0, view0: v, moved: true, button: 0 };
         setPanning(true);
@@ -445,17 +540,21 @@ export function SketchBoard() {
         setView({ ...v, ox: v.ox + sx - gesture.sx0, oy: v.oy + sy - gesture.sy0 });
         return;
       }
+      case 'reference': {
+        const [px, py] = toPlane(v, sx, sy);
+        actions.updateReference(gesture.id, { x: gesture.x0 + px - gesture.px0, y: gesture.y0 + py - gesture.py0 });
+        return;
+      }
       case 'dots': {
         if (!gesture.moved && Math.hypot(sx - gesture.sx0, sy - gesture.sy0) < CLICK_SLOP) return;
         gesture.moved = true;
-        if (gesture.before.type !== 'sketch') return;
         const [rx, ry] = toPlane(v, sx, sy);
         const [tx, ty] = toScreen(v, rx + gesture.grab[0], ry + gesture.grab[1]);
         const target = locate(tx, ty, false, new Set(gesture.ids));
-        const next = translatePoints(gesture.before.sketch, gesture.ids, target.x - gesture.anchor[0], target.y - gesture.anchor[1]);
+        const next = translatePoints(gesture.base, gesture.ids, target.x - gesture.anchor[0], target.y - gesture.anchor[1]);
         gesture.current = next;
         gesture.mergeInto = gesture.ids.length === 1 && target.dot ? target.dot : null;
-        actions.store.previewSource(gesture.objectId, { ...gesture.before, sketch: next });
+        actions.previewDrawing(gesture.objectId, gesture.view, next, gesture.before);
         setHover({ ...target, sx: tx, sy: ty });
         return;
       }
@@ -510,6 +609,8 @@ export function SketchBoard() {
       case 'press':
         drawClick(gesture.click);
         break;
+      case 'reference':
+        break;
       case 'dots': {
         if (!gesture.moved) {
           if (gesture.click) drawClick(gesture.click);
@@ -525,11 +626,11 @@ export function SketchBoard() {
           if (state.chainFrom === gesture.ids[0]) boardStore.set({ chainFrom: gesture.mergeInto });
           if (state.selectedPoints.includes(gesture.ids[0])) boardStore.set({ selectedPoints: [gesture.mergeInto] });
         }
-        actions.editBlueprint(gesture.objectId, next, label, gesture.before);
+        actions.editDrawing(gesture.objectId, gesture.view, next, label, gesture.before);
         break;
       }
       case 'marquee': {
-        const active = actions.activeBlueprint();
+        const active = actions.activeDrawing();
         const state = boardStore.getState();
         const width = Math.abs(sx - gesture.sx0);
         const height = Math.abs(sy - gesture.sy0);
@@ -539,14 +640,14 @@ export function SketchBoard() {
         }
         const left = Math.min(sx, gesture.sx0);
         const top = Math.min(sy, gesture.sy0);
-        const inside = Object.values(active.source.sketch.points)
+        const inside = Object.values(active.sketch.points)
           .filter((p) => {
             const [px, py] = toScreen(viewRef.current, p.x, p.y);
             return px >= left && px <= left + width && py >= top && py <= top + height;
           })
           .map((p) => p.id);
         const points = gesture.additive ? [...new Set([...state.selectedPoints, ...inside])] : inside;
-        const lines = linesBetween(active.source.sketch, new Set(points));
+        const lines = linesBetween(active.sketch, new Set(points));
         boardStore.set({ selectedPoints: points, selectedLines: gesture.additive ? [...new Set([...state.selectedLines, ...lines])] : lines });
         break;
       }
@@ -572,22 +673,6 @@ export function SketchBoard() {
 
   // -- Derived drawing data ---------------------------------------------------------------------
 
-  const regions = useMemo(() => {
-    if (!sketch || !shape || shape.mode === 'revolve') return [];
-    const resolved = resolveSketch(sketch, shape.mirror);
-    return findRegions(resolved).map((region) =>
-      [region.outer, ...region.holes].map((loop) => loop.map((id) => resolved.points.get(id)!)),
-    );
-  }, [sketch, shape]);
-
-  const ghostSegments = useMemo(() => {
-    if (!sketch || !showAxis) return [];
-    const resolved = resolveSketch(sketch, true);
-    return resolved.segments
-      .filter(([a, b]) => a.endsWith('~m') || b.endsWith('~m'))
-      .map(([a, b]) => [resolved.points.get(a)!, resolved.points.get(b)!] as const);
-  }, [sketch, showAxis]);
-
   const { width, height } = size;
   const grid = useMemo(() => {
     if (!width || !height) return null;
@@ -603,14 +688,12 @@ export function SketchBoard() {
       for (let i = Math.ceil(x0 / step); i * step <= x1; i++) {
         const x = i * step;
         if (skipMajor && Math.abs(x / major - Math.round(x / major)) < 1e-6) continue;
-        const sx = view.ox + x * view.scale;
-        d += `M${sx.toFixed(1)} 0V${height}`;
+        d += `M${(view.ox + x * view.scale).toFixed(1)} 0V${height}`;
       }
       for (let i = Math.ceil(y0 / step); i * step <= y1; i++) {
         const y = i * step;
         if (skipMajor && Math.abs(y / major - Math.round(y / major)) < 1e-6) continue;
-        const sy = view.oy - y * view.scale;
-        d += `M0 ${sy.toFixed(1)}H${width}`;
+        d += `M0 ${(view.oy - y * view.scale).toFixed(1)}H${width}`;
       }
       return d;
     };
@@ -621,60 +704,103 @@ export function SketchBoard() {
     return { minor: minor < major ? lines(minor, true) : '', major: lines(major, false), labelsX, labelsY };
   }, [view, width, height, board.snapSize]);
 
-  const chainPoint = board.tool === 'draw' && board.chainFrom && sketch ? sketch.points[board.chainFrom] ?? null : null;
+  const pen = isPenTool(board.tool);
+  const chainPoint = pen && board.chainFrom && sketch ? sketch.points[board.chainFrom] ?? null : null;
   const selectedPoints = new Set(board.selectedPoints);
   const selectedLines = new Set(board.selectedLines);
-  const showCursor = hover && !panning && !panReady && (board.tool !== 'select' || gestureRef.current?.kind === 'dots');
-  const drawingLength = chainPoint && hover && board.tool === 'draw' ? Math.hypot(hover.x - chainPoint.x, hover.y - chainPoint.y) : null;
-  const fill = blueprint?.material.color ?? '#62cbff';
+  const showCursor = hover && !panning && !panReady && !board.adjustingReference && (board.tool !== 'select' || gestureRef.current?.kind === 'dots');
+  const drawingLength = chainPoint && hover && pen ? Math.hypot(hover.x - chainPoint.x, hover.y - chainPoint.y) : null;
+  const fill = object?.material.color ?? '#62cbff';
   const s = (x: number, y: number) => toScreen(view, x, y);
+  const planeReferences = references.filter((r) => r.plane === plane && r.visible);
+  const hasPicks = board.selectedPoints.length > 0 || board.selectedLines.length > 0;
+  const emptyView = !!sketch && Object.keys(sketch.points).length === 0;
 
   const hint = (() => {
+    if (board.adjustingReference) return 'Drag to move the picture. Set its width in the Pictures panel. Press Done when it lines up.';
     if (board.tool === 'rectangle') return 'Drag to draw a rectangle. Hold Shift for a square.';
     if (board.tool === 'circle') return `Drag from the centre to draw a circle with ${board.circleSides} sides.`;
-    if (board.tool === 'select') return 'Click or drag a box to pick dots. Drag to move them. Delete removes. Shift adds to the pick.';
-    if (!blueprint) return 'Click anywhere to place the first dot of a new blueprint.';
-    if (chainPoint) return 'Click to add the next dot. Click the first dot to close the shape. Esc, Enter or right-click stops.';
-    if (revolve) return 'Draw the right half of a profile: it spins around the orange axis. Click a dot to continue from it.';
-    return 'Click to place a dot. Click a dot to continue from it, or a line to add a dot on it. Drag a dot to move it.';
+    if (board.tool === 'select') return 'Click or drag a box to pick dots. Drag to move them. S makes them smooth or sharp. Delete removes. Shift adds to the pick.';
+    if (!drawing) return 'Click anywhere to place the first dot of a new blueprint.';
+    if (chainPoint) return 'Click to add the next dot. Click the first dot to close the shape. Esc, Enter or right-click stops. Backspace steps back.';
+    if (isBody && drawing.view) return VIEW_HELP[drawing.view];
+    if (revolveAxis === 'vertical') return 'Draw the right half of a profile: it spins around the orange axis.';
+    if (revolveAxis === 'horizontal') return 'Draw the profile above the orange line: it spins around it, like a wheel on its axle.';
+    return board.tool === 'curve'
+      ? 'Curve pen: every dot is smooth, so lines bend through them. Click a dot to continue from it.'
+      : 'Click to place a dot. Click a dot to continue from it, or a line to add a dot on it. Drag a dot to move it.';
   })();
 
   const counts = sketch ? `${plural(Object.keys(sketch.points).length, 'dot')} · ${plural(Object.keys(sketch.lines).length, 'line')}` : '';
 
+  const pickerValue = object?.id ?? '';
+  const onPick = (value: string) => {
+    if (value === '__blueprint') actions.startNewBlueprint();
+    else if (value === '__body') actions.createBody();
+    else if (value) actions.select(value);
+    else actions.startNewBlueprint();
+  };
+
   return (
     <section className="board" aria-label="Blueprint board">
       <header className="board-header">
-        <label className="board-picker" title="Blueprint shown on the board">
-          <Icon name="blueprint" size={15} />
-          <span className="visually-hidden">Blueprint</span>
-          <select
-            value={blueprint?.id ?? ''}
-            onChange={(event) => (event.target.value ? actions.select(event.target.value) : actions.startNewBlueprint())}
-          >
-            <option value="">{blueprint ? '+ New blueprint' : 'New blueprint'}</option>
-            {blueprints.map((item) => (
+        <label className="board-picker" title="The drawing shown on the board">
+          <Icon name={isBody ? 'car' : 'blueprint'} size={15} />
+          <span className="visually-hidden">Drawing</span>
+          <select value={pickerValue} onChange={(event) => onPick(event.target.value)}>
+            {!object && <option value="">New blueprint</option>}
+            <option value="__blueprint">+ New blueprint</option>
+            <option value="__body">+ New body (side, top, front)</option>
+            {drawn.length > 0 && <option disabled>──────────</option>}
+            {drawn.map((item) => (
               <option key={item.id} value={item.id}>
-                {item.name}
+                {labelOf(item, scene.objects)}
               </option>
             ))}
           </select>
         </label>
-        <div className="segmented" role="radiogroup" aria-label="Drawing plane">
-          {SKETCH_PLANES.map((item) => (
-            <button
-              key={item}
-              type="button"
-              role="radio"
-              aria-checked={plane === item}
-              className={plane === item ? 'is-active' : ''}
-              title={PLANE_INFO[item].title}
-              onClick={() => (blueprint ? actions.setBlueprintPlane(blueprint.id, item) : boardStore.set({ newPlane: item }))}
-            >
-              {PLANE_INFO[item].label}
-            </button>
-          ))}
+        <div className="segmented" role="radiogroup" aria-label={isBody ? 'Body view' : 'Drawing plane'}>
+          {isBody && object?.source.type === 'body'
+            ? BODY_VIEWS.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  role="radio"
+                  aria-checked={board.bodyView === item}
+                  className={board.bodyView === item ? 'is-active' : ''}
+                  title={VIEW_HELP[item]}
+                  onClick={() => boardStore.set({ bodyView: item })}
+                >
+                  <span className={`view-dot ${bodyStatus?.closed[item] ? 'is-done' : ''}`} aria-hidden="true" />
+                  {PLANE_INFO[item].label}
+                </button>
+              ))
+            : SKETCH_PLANES.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  role="radio"
+                  aria-checked={plane === item}
+                  className={plane === item ? 'is-active' : ''}
+                  title={PLANE_INFO[item].title}
+                  onClick={() => (object ? actions.setBlueprintPlane(object.id, item) : boardStore.set({ newPlane: item }))}
+                >
+                  {PLANE_INFO[item].label}
+                </button>
+              ))}
         </div>
         <span className="board-spacer" />
+        <button
+          type="button"
+          className={`text-button is-quiet ${board.referencesOpen ? 'is-on' : ''}`}
+          onClick={() => boardStore.set({ referencesOpen: !board.referencesOpen, adjustingReference: null })}
+          aria-pressed={board.referencesOpen}
+          title="Pictures to trace over, such as car blueprints"
+        >
+          <Icon name="image" size={14} />
+          Pictures
+          {references.filter((r) => r.plane === plane).length > 0 && <span className="badge">{references.filter((r) => r.plane === plane).length}</span>}
+        </button>
         <div className="snap-control" title="Snap dots to the board grid">
           <button
             type="button"
@@ -716,33 +842,40 @@ export function SketchBoard() {
             </button>
           ))}
           <span className="rail-separator" />
+          <button type="button" className="rail-button" onClick={() => actions.toggleSmoothPicked()} disabled={!hasPicks} title="Make picked dots smooth or sharp (S)">
+            <Icon name="smooth" size={18} />
+          </button>
           <button
             type="button"
-            className={`rail-button ${shape?.mirror ? 'is-active' : ''}`}
-            aria-pressed={!!shape?.mirror}
+            className={`rail-button ${drawing?.mirror && !revolveAxis ? 'is-active' : ''}`}
+            aria-pressed={!!drawing?.mirror}
             onClick={actions.toggleMirror}
-            disabled={!blueprint}
-            title="Mirror: draw one half, get both (M)"
+            disabled={!drawing || (isBody && drawing.view === 'side')}
+            title={isBody ? 'Symmetric: draw the right half of the top and front views (M)' : 'Mirror: draw one half, get both (M)'}
           >
             <Icon name="mirror" size={18} />
-          </button>
-          <button type="button" className="rail-button" onClick={() => actions.startNewBlueprint()} title="New blueprint">
-            <Icon name="plus" size={18} />
           </button>
           <button
             type="button"
             className="rail-button"
             onClick={() => actions.deleteBoardSelection()}
-            disabled={board.selectedPoints.length === 0 && board.selectedLines.length === 0}
+            disabled={!hasPicks}
             title="Delete picked dots and lines (Delete)"
           >
             <Icon name="trash" size={18} />
+          </button>
+          <span className="rail-separator" />
+          <button type="button" className="rail-button" onClick={() => actions.startNewBlueprint()} title="New blueprint">
+            <Icon name="plus" size={18} />
+          </button>
+          <button type="button" className="rail-button" onClick={actions.createBody} title="New body from side, top and front views (car bodies, hulls)">
+            <Icon name="car" size={18} />
           </button>
         </div>
 
         <div
           ref={hostRef}
-          className={`board-canvas tool-${board.tool} ${panning ? 'is-panning' : ''} ${panReady ? 'is-pan-ready' : ''}`}
+          className={`board-canvas tool-${board.tool} ${panning ? 'is-panning' : ''} ${panReady ? 'is-pan-ready' : ''} ${board.adjustingReference ? 'is-adjusting' : ''}`}
         >
           <svg
             ref={svgRef}
@@ -763,6 +896,26 @@ export function SketchBoard() {
             onContextMenu={(event) => event.preventDefault()}
             onDoubleClick={() => boardStore.set({ chainFrom: null })}
           >
+            {planeReferences.map((reference) => {
+              const h = reference.width * reference.aspect;
+              const [left, top] = s(reference.x - reference.width / 2, reference.y + h / 2);
+              const w = reference.width * view.scale;
+              const hh = h * view.scale;
+              return (
+                <image
+                  key={reference.id}
+                  className={`board-reference ${board.adjustingReference === reference.id ? 'is-adjusting' : ''}`}
+                  href={reference.src}
+                  x={left}
+                  y={top}
+                  width={w}
+                  height={hh}
+                  opacity={reference.opacity}
+                  preserveAspectRatio="none"
+                  transform={reference.flip ? `translate(${2 * left + w} 0) scale(-1 1)` : undefined}
+                />
+              );
+            })}
             {grid && (
               <g className="board-grid">
                 <path className="grid-minor" d={grid.minor} />
@@ -771,9 +924,9 @@ export function SketchBoard() {
             )}
             {width > 0 && (
               <g className="board-axes">
-                <line className="axis-ground" x1={0} x2={width} y1={view.oy} y2={view.oy} />
+                <line className={`axis-ground ${revolveAxis === 'horizontal' ? 'is-revolve' : ''}`} x1={0} x2={width} y1={view.oy} y2={view.oy} />
                 <line
-                  className={`axis-vertical ${revolve ? 'is-revolve' : showAxis ? 'is-mirror' : ''}`}
+                  className={`axis-vertical ${revolveAxis === 'vertical' ? 'is-revolve' : showVerticalAxis ? 'is-mirror' : ''}`}
                   x1={view.ox}
                   x2={view.ox}
                   y1={0}
@@ -796,6 +949,28 @@ export function SketchBoard() {
               </g>
             )}
 
+            {guides.map((guide, i) =>
+              guide.axis === 'x' ? (
+                <g key={i} className="board-view-guide">
+                  <line x1={s(guide.value, 0)[0]} x2={s(guide.value, 0)[0]} y1={0} y2={height} />
+                  {i % 2 === 0 && (
+                    <text x={s(guide.value, 0)[0] + 4} y={height - 22}>
+                      {guide.label}
+                    </text>
+                  )}
+                </g>
+              ) : (
+                <g key={i} className="board-view-guide">
+                  <line y1={s(0, guide.value)[1]} y2={s(0, guide.value)[1]} x1={0} x2={width} />
+                  {i % 2 === 0 && (
+                    <text x={width - 8} y={s(0, guide.value)[1] - 4} textAnchor="end">
+                      {guide.label}
+                    </text>
+                  )}
+                </g>
+              ),
+            )}
+
             {regions.map((loops, i) => (
               <path
                 key={i}
@@ -806,21 +981,16 @@ export function SketchBoard() {
               />
             ))}
 
-            {ghostSegments.map(([a, b], i) => {
-              const [ax, ay] = s(a[0], a[1]);
-              const [bx, by] = s(b[0], b[1]);
-              return <line key={i} className="board-ghost" x1={ax} y1={ay} x2={bx} y2={by} />;
-            })}
+            {ghostPaths.map((points, i) => (
+              <path key={i} className="board-ghost" d={pathOf(points.map(([x, y]) => s(x, y)), false)} />
+            ))}
 
             {sketch &&
               Object.values(sketch.lines).map((line) => {
-                const a = sketch.points[line.a];
-                const b = sketch.points[line.b];
-                if (!a || !b) return null;
-                const [ax, ay] = s(a.x, a.y);
-                const [bx, by] = s(b.x, b.y);
+                const points = linePaths.get(line.id);
+                if (!points) return null;
                 const classes = ['board-line', selectedLines.has(line.id) ? 'is-selected' : '', hover?.line === line.id ? 'is-hover' : ''];
-                return <line key={line.id} className={classes.join(' ')} x1={ax} y1={ay} x2={bx} y2={by} />;
+                return <path key={line.id} className={classes.join(' ')} d={pathOf(points.map(([x, y]) => s(x, y)), false)} />;
               })}
 
             {preview?.kind === 'shape' && <path className="board-preview" d={pathOf(preview.points.map(([x, y]) => s(x, y)), true)} />}
@@ -845,19 +1015,26 @@ export function SketchBoard() {
             {sketch &&
               Object.values(sketch.points).map((p) => {
                 const [cx, cy] = s(p.x, p.y);
+                const r = hover?.dot === p.id ? 6 : 4.5;
                 const classes = [
                   'board-dot',
+                  p.smooth ? 'is-smooth' : '',
                   selectedPoints.has(p.id) ? 'is-selected' : '',
-                  board.chainFrom === p.id && board.tool === 'draw' ? 'is-chain' : '',
+                  board.chainFrom === p.id && pen ? 'is-chain' : '',
                   hover?.dot === p.id ? 'is-hover' : '',
-                  showAxis && Math.abs(p.x) <= AXIS_EPSILON ? 'is-on-axis' : '',
-                ];
-                return <circle key={p.id} className={classes.join(' ')} cx={cx} cy={cy} r={hover?.dot === p.id ? 6 : 4.5} />;
+                  showVerticalAxis && Math.abs(p.x) <= AXIS_EPSILON ? 'is-on-axis' : '',
+                ].join(' ');
+                // Sharp dots are squares, smooth dots are circles, as in vector drawing apps.
+                return p.smooth ? (
+                  <circle key={p.id} className={classes} cx={cx} cy={cy} r={r} />
+                ) : (
+                  <rect key={p.id} className={classes} x={cx - r} y={cy - r} width={r * 2} height={r * 2} rx={1.5} />
+                );
               })}
 
             {hover && showCursor && !hover.dot && (
               <g className="board-cursor" transform={`translate(${s(hover.x, hover.y)[0]} ${s(hover.x, hover.y)[1]})`}>
-                <circle r={4} />
+                {board.tool === 'curve' ? <circle r={4} /> : <rect x={-3.5} y={-3.5} width={7} height={7} />}
                 <path d="M-11 0h-4 M11 0h4 M0 -11v-4 M0 11v4" />
               </g>
             )}
@@ -873,7 +1050,10 @@ export function SketchBoard() {
             )}
           </svg>
 
-          <div className="board-caption">{PLANE_INFO[plane].caption}</div>
+          <div className="board-caption">
+            {isBody && drawing?.view ? `${object?.name} · ` : ''}
+            {PLANE_INFO[plane].caption}
+          </div>
 
           {board.tool === 'circle' && (
             <label className="board-option">
@@ -891,11 +1071,21 @@ export function SketchBoard() {
             </label>
           )}
 
-          {!blueprint && (
+          {board.referencesOpen && <ReferencePanel plane={plane} />}
+
+          {!drawing && (
             <div className="board-empty">
               <Icon name="blueprint" size={34} />
               <p className="board-empty-title">Click to place your first dot</p>
               <p>Keep clicking to join dots with lines. Close the outline and it turns into a 3D object on the right.</p>
+              <p>For a car body, use the car button on the left: draw it from the side, the top and the front.</p>
+            </div>
+          )}
+          {drawing && isBody && emptyView && drawing.view && (
+            <div className="board-empty is-soft">
+              <Icon name="car" size={30} />
+              <p className="board-empty-title">Draw the {drawing.view} view</p>
+              <p>{VIEW_HELP[drawing.view]}</p>
             </div>
           )}
         </div>

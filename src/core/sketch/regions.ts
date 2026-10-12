@@ -1,11 +1,26 @@
-import { AXIS_EPSILON, type Sketch } from './sketch';
+import { AXIS_EPSILON, DEFAULT_CURVE_STEPS, type Sketch } from './sketch';
 
-/** A drawing resolved for geometry: mirror applied, every dot and line in plane coordinates. */
+type P = [number, number];
+
+/** One line of the drawing as it will be built: its two end dots and every point along it. */
+export interface ResolvedPath {
+  /** End dots (resolved ids; mirrored copies end in "~m"). */
+  a: string;
+  b: string;
+  /** Positions from a to b, including the samples of a curve. */
+  points: P[];
+  /** The drawing's line id, or null for a mirrored copy. */
+  lineId: string | null;
+}
+
+/** A drawing resolved for geometry: mirror applied, curves sampled, every point in plane coordinates. */
 export interface ResolvedSketch {
-  /** Dot positions by id. Mirrored copies have ids ending in "~m". */
-  points: Map<string, [number, number]>;
-  /** Unique lines as [a, b] dot ids. */
+  /** Positions by id. Mirrored copies end in "~m"; curve samples are named "a>b:k". */
+  points: Map<string, P>;
+  /** Straight pieces as [a, b] ids, after curves are sampled. */
   segments: [string, string][];
+  /** The drawing's lines (and mirrored copies), for display. */
+  paths: ResolvedPath[];
 }
 
 /** A filled area: an outer boundary (counter-clockwise) with optional holes (clockwise). */
@@ -15,14 +30,30 @@ export interface Region {
   area: number;
 }
 
-type P = [number, number];
-
 export function mirrorId(id: string): string {
   return `${id}~m`;
 }
 
-/** Applies the mirror (across x = 0). Dots on the axis are shared by both halves. */
-export function resolveSketch(sketch: Sketch, mirror: boolean): ResolvedSketch {
+function baseId(id: string): string {
+  return id.endsWith('~m') ? id.slice(0, -2) : id;
+}
+
+function bezier(p0: P, p1: P, p2: P, p3: P, t: number): P {
+  const u = 1 - t;
+  const a = u * u * u;
+  const b = 3 * u * u * t;
+  const c = 3 * u * t * t;
+  const d = t * t * t;
+  return [a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0], a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]];
+}
+
+/**
+ * Applies the mirror (across x = 0) and bends the lines at smooth dots into curves.
+ * Dots on the axis are shared by both halves, so a smooth dot there makes a round
+ * nose rather than a point. Curves pass through every dot (Catmull-Rom style): at a
+ * smooth dot with two lines, the curve's direction runs from one neighbour to the other.
+ */
+export function resolveSketch(sketch: Sketch, mirror: boolean, curveSteps: number = DEFAULT_CURVE_STEPS): ResolvedSketch {
   const points = new Map<string, P>();
   const onAxis = (x: number) => Math.abs(x) <= AXIS_EPSILON;
   for (const p of Object.values(sketch.points)) {
@@ -31,19 +62,73 @@ export function resolveSketch(sketch: Sketch, mirror: boolean): ResolvedSketch {
   }
   const mirrored = (id: string) => (mirror && points.has(mirrorId(id)) ? mirrorId(id) : id);
   const seen = new Set<string>();
-  const segments: [string, string][] = [];
-  const push = (a: string, b: string) => {
+  const lines: { a: string; b: string; lineId: string | null }[] = [];
+  const push = (a: string, b: string, lineId: string | null) => {
     if (a === b) return;
     const key = a < b ? `${a}|${b}` : `${b}|${a}`;
     if (seen.has(key)) return;
     seen.add(key);
-    segments.push([a, b]);
+    lines.push({ a, b, lineId });
   };
   for (const line of Object.values(sketch.lines)) {
-    push(line.a, line.b);
-    if (mirror) push(mirrored(line.a), mirrored(line.b));
+    push(line.a, line.b, line.id);
+    if (mirror) push(mirrored(line.a), mirrored(line.b), null);
   }
-  return { points, segments };
+
+  const neighbours = new Map<string, string[]>();
+  for (const { a, b } of lines) {
+    if (!neighbours.has(a)) neighbours.set(a, []);
+    if (!neighbours.has(b)) neighbours.set(b, []);
+    neighbours.get(a)!.push(b);
+    neighbours.get(b)!.push(a);
+  }
+  const steps = Math.max(1, Math.round(curveSteps));
+  /** Where the curve leaving `from` towards `to` is pulled, or null for a straight start. */
+  const handle = (from: string, to: string, length: number): P | null => {
+    if (!sketch.points[baseId(from)]?.smooth) return null;
+    const around = neighbours.get(from) ?? [];
+    if (around.length !== 2) return null;
+    const other = around[0] === to ? around[1] : around[0];
+    const pf = points.get(from)!;
+    const pt = points.get(to)!;
+    const po = points.get(other)!;
+    const dx = pt[0] - po[0];
+    const dy = pt[1] - po[1];
+    const d = Math.hypot(dx, dy);
+    if (d < 1e-12) return null;
+    return [pf[0] + (dx / d) * (length / 3), pf[1] + (dy / d) * (length / 3)];
+  };
+
+  const segments: [string, string][] = [];
+  const paths: ResolvedPath[] = [];
+  for (const { a, b, lineId } of lines) {
+    const pa = points.get(a)!;
+    const pb = points.get(b)!;
+    const length = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]);
+    const ha = handle(a, b, length);
+    const hb = handle(b, a, length);
+    if (!ha && !hb) {
+      segments.push([a, b]);
+      paths.push({ a, b, points: [pa, pb], lineId });
+      continue;
+    }
+    const c1 = ha ?? pa;
+    const c2 = hb ?? pb;
+    const path: P[] = [pa];
+    let previous = a;
+    for (let k = 1; k < steps; k++) {
+      const id = `${a}>${b}:${k}`;
+      const p = bezier(pa, c1, c2, pb, k / steps);
+      points.set(id, p);
+      path.push(p);
+      segments.push([previous, id]);
+      previous = id;
+    }
+    segments.push([previous, b]);
+    path.push(pb);
+    paths.push({ a, b, points: path, lineId });
+  }
+  return { points, segments, paths };
 }
 
 export function signedArea(loop: readonly string[], points: Map<string, P>): number {

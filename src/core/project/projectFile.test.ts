@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createPartObject } from '../scene/parts';
+import { createBlueprintObject, createBodyObject, createPartObject } from '../scene/parts';
+import { createBodyViews } from '../sketch/body';
+import { addPolyline, createSketch } from '../sketch/sketch';
 import type { Scene } from '../scene/types';
 import { createDefaultDocument } from './defaultDocument';
 import { ensureProjectExtension, fileNameFromPath, projectNameFromPath } from './paths';
+import { createReference } from './references';
 import {
   DEFAULT_SETTINGS,
   migrateProjectData,
@@ -147,6 +150,65 @@ describe('.forgex project files', () => {
     expect(fromVersion).toBe(1);
     expect(data).toEqual({ version: 3, addedIn2: true, addedIn3: true });
     expect(() => migrateProjectData({ version: 1 }, 3, { 1: migrations[1] })).toThrow('No upgrade path');
+  });
+});
+
+describe('version 3 content', () => {
+  it('round-trips smooth dots, bodies, modifiers, shading and reference pictures', () => {
+    const doc = sampleDocument();
+    const curved = createBlueprintObject({
+      name: 'Blade',
+      id: 'obj_blade',
+      sketch: addPolyline(createSketch('front'), [[0, 1], [0.2, 0.5], [0, 0]], false, (i) => i === 1).sketch,
+      shape: { mode: 'extrude', mirror: true, curveSteps: 6 },
+      modifiers: { mirror: 'none', subdivide: 1 },
+    });
+    const hull = createBodyObject({
+      name: 'Hull',
+      id: 'obj_hull',
+      views: {
+        ...createBodyViews(),
+        side: addPolyline(createSketch('side'), [[-1, 0], [1, 0], [1, 0.5], [-1, 0.5]], true, true).sketch,
+      },
+      body: { stations: 20 },
+    });
+    const scene: Scene = {
+      rootIds: [...doc.scene.rootIds, 'obj_blade', 'obj_hull'],
+      objects: { ...doc.scene.objects, obj_blade: curved, obj_hull: hull },
+    };
+    const references = [{ ...createReference({ id: 'ref_1', plane: 'side' as const, name: 'Car side', src: 'data:image/png;base64,iVBORw0KGgo=', aspect: 0.4 }), flip: true }];
+    const document: ProjectDocument = { ...doc, scene, references };
+    const text = serializeProject(document);
+    expect(JSON.parse(text).version).toBe(3);
+    const reopened = parseProject(text);
+    if (!reopened.ok) throw new Error(reopened.errors.join('\n'));
+    expect(reopened.document).toEqual(document);
+  });
+
+  it('opens version 2 files and skips broken reference pictures with a warning', () => {
+    const v2 = mutate(serializeProject(sampleDocument()), (data) => {
+      data.version = 2;
+    });
+    const old = parseProject(v2);
+    expect(old.ok && old.migratedFrom).toBe(2);
+    const bad = parseProject(mutate(serializeProject(sampleDocument()), (data) => {
+      data.references = [{ id: 'r', plane: 'side', src: 'javascript:alert(1)', aspect: 1, x: 0, y: 0, width: 1, opacity: 1 }];
+    }));
+    expect(bad.ok).toBe(true);
+    if (bad.ok) {
+      expect(bad.document.references).toBeUndefined();
+      expect(bad.warnings.join(' ')).toContain('Reference picture 1');
+    }
+  });
+
+  it('rejects bad modifiers and broken body drawings', () => {
+    const doc = sampleDocument();
+    const hull = createBodyObject({ name: 'Hull', id: 'obj_hull' });
+    const text = serializeProject({ ...doc, scene: { rootIds: [...doc.scene.rootIds, 'obj_hull'], objects: { ...doc.scene.objects, obj_hull: hull } } });
+    const badModifiers = parseProject(mutate(text, (data) => (data.scene.objects[1].modifiers = { mirror: 'w', subdivide: 1 })));
+    expect(!badModifiers.ok && badModifiers.errors.join(' ')).toContain('modifiers');
+    const badBody = parseProject(mutate(text, (data) => (data.scene.objects.at(-1).source.views.top = { points: 'none' })));
+    expect(!badBody.ok && badBody.errors.join(' ')).toContain('views.top');
   });
 });
 

@@ -6,7 +6,7 @@ import { newellNormal, triangulatePolygon } from './polygon';
 export interface MeshData {
   /** Non-indexed triangle positions (x, y, z per corner). */
   positions: Float32Array;
-  /** Flat normals, one per corner. */
+  /** Normals, one per corner: flat, or smoothed across gentle angles (see options). */
   normals: Float32Array;
   /** Line segment endpoints for every graph edge (or only the feature edges, see options). */
   edgePositions: Float32Array;
@@ -23,6 +23,12 @@ export interface MeshDataOptions {
    * generated meshes show only their real outline and creases.
    */
   featureEdgesOnly?: boolean;
+  /**
+   * Smooth shading: corners share the normal of neighbouring faces that meet at less
+   * than this angle (degrees), so curved surfaces look round while sharp creases stay
+   * sharp. Omit or 0 for flat shading.
+   */
+  smoothAngle?: number;
 }
 
 const SMOOTH_DOT = Math.cos((25 * Math.PI) / 180);
@@ -36,10 +42,37 @@ export function buildMeshData(graph: ConstructionGraph, options: MeshDataOptions
   const positions: number[] = [];
   const normals: number[] = [];
   const edgeFaces = new Map<string, Vec3[]>();
+  const faces = Object.values(graph.faces);
+  // Area-weighted (raw Newell) and unit normal of every face.
+  const rawNormals = faces.map((face) => newellNormal(face.vertexIds.map((id) => graph.vertices[id].position)));
+  const unitNormals = rawNormals.map((n) => normalize(n));
+  const smoothCos = options.smoothAngle && options.smoothAngle > 0 ? Math.cos((Math.min(options.smoothAngle, 180) * Math.PI) / 180) : null;
+  const facesByVertex = new Map<string, number[]>();
+  if (smoothCos !== null) {
+    faces.forEach((face, i) => {
+      for (const id of face.vertexIds) {
+        const list = facesByVertex.get(id);
+        if (list) list.push(i);
+        else facesByVertex.set(id, [i]);
+      }
+    });
+  }
+  /** The shading normal of face `fi` at vertex `id`. */
+  const cornerNormal = (fi: number, id: string): Vec3 => {
+    const own = unitNormals[fi];
+    let sum: Vec3 = [0, 0, 0];
+    for (const other of facesByVertex.get(id) ?? []) {
+      if (other !== fi && dot(own, unitNormals[other]) < smoothCos!) continue;
+      const r = rawNormals[other];
+      sum = [sum[0] + r[0], sum[1] + r[1], sum[2] + r[2]];
+    }
+    return length(sum) > 1e-12 ? normalize(sum) : own;
+  };
 
-  for (const face of Object.values(graph.faces)) {
+  for (const [fi, face] of faces.entries()) {
     const points = face.vertexIds.map((id) => graph.vertices[id].position);
-    const faceNormal = normalize(newellNormal(points));
+    const faceNormal = unitNormals[fi];
+    const corners = smoothCos !== null ? face.vertexIds.map((id) => cornerNormal(fi, id)) : null;
     if (options.featureEdgesOnly) {
       face.vertexIds.forEach((id, i) => {
         const key = edgeKey(id, face.vertexIds[(i + 1) % face.vertexIds.length]);
@@ -54,19 +87,23 @@ export function buildMeshData(graph: ConstructionGraph, options: MeshDataOptions
       const b = points[triangles[t + 1]];
       const c = points[triangles[t + 2]];
       const raw = cross(sub(b, a), sub(c, a));
-      const n: Vec3 = length(raw) > 1e-12 ? normalize(raw) : faceNormal;
-      for (const p of [a, b, c]) {
+      const flatNormal: Vec3 = length(raw) > 1e-12 ? normalize(raw) : faceNormal;
+      for (let k = 0; k < 3; k++) {
+        const p = points[triangles[t + k]];
+        const n = corners ? corners[triangles[t + k]] : flatNormal;
         positions.push(p[0], p[1], p[2]);
         normals.push(n[0], n[1], n[2]);
       }
     }
   }
 
+  // Where shading is smooth across an edge, no line is drawn there either.
+  const featureDot = smoothCos !== null ? Math.min(SMOOTH_DOT, smoothCos) : SMOOTH_DOT;
   const edgePositions: number[] = [];
   for (const edge of Object.values(graph.edges)) {
     if (options.featureEdgesOnly) {
       const adjacent = edgeFaces.get(edgeKey(edge.a, edge.b));
-      if (adjacent && adjacent.length === 2 && dot(adjacent[0], adjacent[1]) > SMOOTH_DOT) continue;
+      if (adjacent && adjacent.length === 2 && dot(adjacent[0], adjacent[1]) > featureDot) continue;
     }
     const a = graph.vertices[edge.a].position;
     const b = graph.vertices[edge.b].position;

@@ -6,6 +6,7 @@ import {
   RenameObjectCommand,
   SetColorCommand,
   SetGraphCommand,
+  SetMeshLookCommand,
   SetSourceCommand,
   SetTransformCommand,
   SetVisibilityCommand,
@@ -24,13 +25,16 @@ import {
   type ConstructionGraph,
 } from '../geometry/constructionGraph';
 import { fillClosedLoops } from '../geometry/loops';
+import { cleanModifiers, hasModifiers, MAX_SUBDIVISION, MIRROR_AXES, NO_MODIFIERS } from '../geometry/modifiers';
 import { orientFaces } from '../geometry/orientation';
 import { createObjectId } from '../ids';
 import { cleanTransform, decomposeMatrix, identityTransform, type Transform } from '../math/transform';
 import { add, cleanVec3, type Vec3 } from '../math/vec3';
-import { BLUEPRINT_COLORS, PARTS, createBlueprintObject, createPartObject, getPart, type PartId } from '../scene/parts';
+import { BLUEPRINT_COLORS, PARTS, createBlueprintObject, createBodyObject, createPartObject, getPart, type PartId } from '../scene/parts';
 import { cloneSubtree, indexInParent, isSelfOrAncestor, uniqueName, worldMatrix } from '../scene/scene';
-import { isConstructionMesh, isSketchMesh, meshGraphOf, type MeshObject, type Scene, type SceneObject } from '../scene/types';
+import { createTemplate, getTemplate, TEMPLATES, type TemplateId } from '../scene/templates';
+import { isBodyMesh, isConstructionMesh, isSketchMesh, meshGraphOf, sourceGraphOf, type MeshObject, type MeshSource, type Scene, type SceneObject } from '../scene/types';
+import { BODY_LIMITS, BODY_VIEWS, clampBody, createBodyViews, DEFAULT_BODY, generateBody, type BodySettings, type BodyView, type BodyViews } from '../sketch/body';
 import { generateShape } from '../sketch/generate';
 import {
   addLine as addSketchLine,
@@ -41,7 +45,11 @@ import {
   movePoint as moveSketchPoint,
   removeLine as removeSketchLine,
   removePoint as removeSketchPoint,
+  MAX_CURVE_STEPS,
+  MIN_CURVE_STEPS,
+  REVOLVE_AXES,
   setPlane,
+  setPointsSmooth,
   SHAPE_MODES,
   SketchError,
   SKETCH_PLANES,
@@ -93,6 +101,30 @@ const transformProps = {
   scale: vec3('Scale factors [x, y, z]'),
 };
 const noArgs = { type: 'object', properties: {}, additionalProperties: false };
+const point2 = { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 };
+const shapeSchema = {
+  type: 'object',
+  properties: {
+    mode: { type: 'string', enum: [...SHAPE_MODES] },
+    depth: { type: 'number', minimum: 0, description: 'Extrusion thickness in metres (default 0.2)' },
+    segments: { type: 'integer', minimum: 3, maximum: 256, description: 'Steps around the axis when revolving (default 32)' },
+    mirror: { type: 'boolean', description: 'Copy the drawing across x = 0' },
+    axis: { type: 'string', enum: [...REVOLVE_AXES], description: 'Revolve around the vertical line x = 0 (default) or the horizontal line y = 0 (wheels)' },
+    curve_steps: { type: 'integer', minimum: MIN_CURVE_STEPS, maximum: MAX_CURVE_STEPS, description: 'Straight pieces per curved line (default 10)' },
+  },
+  additionalProperties: false,
+};
+const bodySchema = {
+  type: 'object',
+  properties: {
+    stations: { type: 'integer', minimum: BODY_LIMITS.stations[0], maximum: BODY_LIMITS.stations[1], description: 'Slices along the length (default 48)' },
+    section_points: { type: 'integer', minimum: BODY_LIMITS.sectionPoints[0], maximum: BODY_LIMITS.sectionPoints[1], description: 'Points around each slice (default 40)' },
+    roundness: { type: 'number', minimum: BODY_LIMITS.roundness[0], maximum: BODY_LIMITS.roundness[1], description: 'Cross-section when there is no front view: 2 oval, higher boxier (default 4)' },
+    symmetric: { type: 'boolean', description: 'Top and front views are right halves, mirrored (default true)' },
+    curve_steps: { type: 'integer', minimum: MIN_CURVE_STEPS, maximum: MAX_CURVE_STEPS },
+  },
+  additionalProperties: false,
+};
 const readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 const edit = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 
@@ -134,8 +166,8 @@ export function resolveObject(scene: Scene, ref: unknown, label = 'object'): Sce
 
 function resolveConstruction(scene: Scene, ref: unknown): ConstructionMesh {
   const object = resolveObject(scene, ref);
-  if (isSketchMesh(object)) {
-    throw new ToolError(`${object.name} is a blueprint: change it with edit_blueprint, or call convert_to_points first to edit its 3D points directly.`);
+  if (isSketchMesh(object) || isBodyMesh(object)) {
+    throw new ToolError(`${object.name} is drawn (a ${isBodyMesh(object) ? 'body' : 'blueprint'}): change it with edit_blueprint, or call convert_to_points first to edit its 3D points directly.`);
   }
   if (!isConstructionMesh(object)) {
     throw new ToolError(`${object.name} is not point-built. Only objects made with create_point_mesh, Cube or Plane have editable points.`);
@@ -144,10 +176,13 @@ function resolveConstruction(scene: Scene, ref: unknown): ConstructionMesh {
 }
 
 type SketchMesh = MeshObject & { source: { type: 'sketch'; sketch: Sketch; shape: ShapeSettings } };
+type BodyMesh = MeshObject & { source: { type: 'body'; views: BodyViews; body: BodySettings } };
 
-function resolveBlueprint(scene: Scene, ref: unknown): SketchMesh {
+function resolveDrawn(scene: Scene, ref: unknown): SketchMesh | BodyMesh {
   const object = resolveObject(scene, ref);
-  if (!isSketchMesh(object)) throw new ToolError(`${object.name} is not a blueprint. Blueprints are made with create_blueprint or by drawing on the board.`);
+  if (!isSketchMesh(object) && !isBodyMesh(object)) {
+    throw new ToolError(`${object.name} is not drawn. Blueprints come from create_blueprint, bodies from create_body, or both from drawing on the board.`);
+  }
   return object;
 }
 
@@ -157,9 +192,25 @@ function readShape(raw: unknown, base: ShapeSettings): ShapeSettings {
   const shapeArgs = raw as Args;
   return clampShape({
     mode: optEnum(shapeArgs, 'mode', SHAPE_MODES) ?? base.mode,
-    depth: (shapeArgs.depth === undefined ? base.depth : Number(shapeArgs.depth)),
-    segments: (shapeArgs.segments === undefined ? base.segments : Number(shapeArgs.segments)),
+    depth: shapeArgs.depth === undefined ? base.depth : Number(shapeArgs.depth),
+    segments: shapeArgs.segments === undefined ? base.segments : Number(shapeArgs.segments),
     mirror: optBool(shapeArgs, 'mirror') ?? base.mirror,
+    axis: optEnum(shapeArgs, 'axis', REVOLVE_AXES) ?? base.axis,
+    curveSteps: shapeArgs.curve_steps === undefined ? base.curveSteps : Number(shapeArgs.curve_steps),
+  });
+}
+
+function readBodySettings(raw: unknown, base: BodySettings): BodySettings {
+  if (raw === undefined || raw === null) return base;
+  if (typeof raw !== 'object' || Array.isArray(raw)) throw new ToolError('body must be an object such as { "stations": 64 }.');
+  const b = raw as Args;
+  const num = (key: string, fallback: number) => (b[key] === undefined ? fallback : Number(b[key]));
+  return clampBody({
+    stations: num('stations', base.stations),
+    sectionPoints: num('section_points', base.sectionPoints),
+    roundness: num('roundness', base.roundness),
+    symmetric: optBool(b, 'symmetric') ?? base.symmetric,
+    curveSteps: num('curve_steps', base.curveSteps),
   });
 }
 
@@ -170,14 +221,52 @@ function blueprintSummary(object: SketchMesh): Record<string, unknown> {
     plane: sketch.plane,
     shape,
     filledAreas: generated.regions,
-    geometry: reportSummary(analyzeGraph(generated.graph)),
+    geometry: reportSummary(analyzeGraph(meshGraphOf(object) ?? generated.graph)),
+  };
+}
+
+function bodySummary(object: BodyMesh): Record<string, unknown> {
+  const generated = generateBody(object.source.views, object.source.body);
+  return {
+    body: object.source.body,
+    closedViews: generated.closed,
+    slices: generated.stations,
+    ...(generated.message ? { missing: generated.message } : {}),
+    geometry: reportSummary(analyzeGraph(meshGraphOf(object) ?? generated.graph)),
   };
 }
 
 function typeOf(object: SceneObject): string {
   if (object.kind === 'group') return 'group';
   if (object.source.type === 'sketch') return 'blueprint';
+  if (object.source.type === 'body') return 'body';
   return object.source.type === 'construction' ? 'point-built' : object.source.primitive;
+}
+
+/** Reads one drawing's dots from tool arguments: [x, y] pairs, with an optional smooth flag for all or some of them. */
+function drawingFromArgs(plane: Sketch['plane'], rawPoints: unknown[], label: string, closed: boolean, smooth: unknown): { sketch: Sketch; ids: string[] } {
+  let sketch = createSketch(plane);
+  const ids: string[] = [];
+  const smoothSet = smoothIndices(smooth, rawPoints.length, `${label} smooth`);
+  rawPoints.forEach((item, i) => {
+    if (!Array.isArray(item) || item.length !== 2 || !item.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+      throw new ToolError(`${label}[${i}] must be [x, y] with two finite numbers.`);
+    }
+    const added = addSketchPoint(sketch, item[0], item[1], smoothSet.has(i));
+    sketch = added.sketch;
+    ids.push(added.pointId);
+  });
+  for (let i = 0; i + 1 < ids.length; i++) sketch = addSketchLine(sketch, ids[i], ids[i + 1]).sketch;
+  if (closed && ids.length >= 3) sketch = addSketchLine(sketch, ids[ids.length - 1], ids[0]).sketch;
+  return { sketch, ids };
+}
+
+/** smooth: true (every dot), false/absent (none) or a list of point indices. */
+function smoothIndices(raw: unknown, count: number, label: string): Set<number> {
+  if (raw === undefined || raw === null || raw === false) return new Set();
+  if (raw === true) return new Set(Array.from({ length: count }, (_, i) => i));
+  if (!Array.isArray(raw)) throw new ToolError(`${label} must be true, false or a list of point indices.`);
+  return new Set(raw.map((value) => toIndex(value, count, label)));
 }
 
 function describe(object: SceneObject): Record<string, unknown> {
@@ -189,7 +278,11 @@ function describe(object: SceneObject): Record<string, unknown> {
     rotation: roundVec(object.transform.rotation, 2),
     scale: roundVec(object.transform.scale),
   };
-  if (object.kind === 'mesh') out.color = object.material.color;
+  if (object.kind === 'mesh') {
+    out.color = object.material.color;
+    if (object.material.smooth) out.smoothShading = true;
+    if (hasModifiers(object.modifiers)) out.modifiers = object.modifiers;
+  }
   if (!object.visible) out.hidden = true;
   return out;
 }
@@ -337,11 +430,19 @@ const TOOLS: ToolDefinition[] = [
         children: object.childIds,
         worldPosition: roundVec(decomposeMatrix(worldMatrix(scene, object.id)).position),
       };
+      const dots = (sketch: Sketch) => ({
+        points: Object.values(sketch.points)
+          .slice(0, MAX_LISTED_ELEMENTS)
+          .map((p) => ({ id: p.id, x: round(p.x, 6), y: round(p.y, 6), ...(p.smooth ? { smooth: true } : {}) })),
+        lines: Object.values(sketch.lines).slice(0, MAX_LISTED_ELEMENTS).map((l) => ({ id: l.id, a: l.a, b: l.b })),
+      });
       if (isSketchMesh(object)) {
-        Object.assign(details, blueprintSummary(object));
-        const { sketch } = object.source;
-        details.points = Object.values(sketch.points).slice(0, MAX_LISTED_ELEMENTS).map((p) => ({ id: p.id, x: round(p.x, 6), y: round(p.y, 6) }));
-        details.lines = Object.values(sketch.lines).slice(0, MAX_LISTED_ELEMENTS).map((l) => ({ id: l.id, a: l.a, b: l.b }));
+        Object.assign(details, blueprintSummary(object), dots(object.source.sketch));
+      }
+      if (isBodyMesh(object)) {
+        Object.assign(details, bodySummary(object), {
+          views: Object.fromEntries(BODY_VIEWS.map((view) => [view, dots(object.source.views[view])])),
+        });
       }
       if (isConstructionMesh(object)) {
         const graph = object.source.graph;
@@ -632,8 +733,10 @@ const TOOLS: ToolDefinition[] = [
     description:
       'Draws a 2D outline of dots and lines on a plane (front, side or top) and turns it into a 3D object, the same way the user draws on the FORGEX board. ' +
       'Closed loops are filled; a loop inside another becomes a hole. shape.mode: "extrude" (default, gives the outline a thickness of shape.depth metres), ' +
-      '"flat" (a panel), or "revolve" (spins the lines around the vertical axis x = 0 like a lathe, for wheels, bottles and vases: draw only the right half, x >= 0). ' +
-      'shape.mirror copies the drawing across x = 0, so you can draw half of a symmetric object. Without lines or loops, the points are joined in order into one closed outline.',
+      '"flat" (a panel), or "revolve" (spins the lines around an axis like a lathe: shape.axis "vertical" spins around x = 0 for bottles and vases, draw the right half with x >= 0; ' +
+      '"horizontal" spins around y = 0 for wheels and barrels, draw the profile above the line with y >= 0; on the front plane that axle runs along X). ' +
+      'shape.mirror copies the drawing across x = 0, so you can draw half of a symmetric object. smooth turns corners into curves. Without lines or loops, the points are joined in order into one closed outline. ' +
+      'For a car body, plane or boat hull use create_body instead.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -654,16 +757,11 @@ const TOOLS: ToolDefinition[] = [
         lines: { type: 'array', items: { type: 'array', items: { type: 'integer', minimum: 0 }, minItems: 2, maxItems: 2 }, description: 'Pairs of point indices to join' },
         loops: { type: 'array', items: { type: 'array', items: { type: 'integer', minimum: 0 }, minItems: 3 }, description: 'Closed outlines as lists of point indices' },
         closed: { type: 'boolean', description: 'When no lines or loops are given: close the outline (default true)' },
-        shape: {
-          type: 'object',
-          properties: {
-            mode: { type: 'string', enum: [...SHAPE_MODES] },
-            depth: { type: 'number', minimum: 0, description: 'Extrusion thickness in metres (default 0.2)' },
-            segments: { type: 'integer', minimum: 3, maximum: 256, description: 'Steps around the axis when revolving (default 32)' },
-            mirror: { type: 'boolean' },
-          },
-          additionalProperties: false,
+        smooth: {
+          anyOf: [{ type: 'boolean' }, { type: 'array', items: { type: 'integer', minimum: 0 } }],
+          description: 'Smooth dots bend their lines into curves through the dot (true for all, or a list of point indices). Use for car bodies, blades, organic shapes.',
         },
+        shape: shapeSchema,
         ...transformProps,
         color,
         parent: objectRef('Optional parent object id or name'),
@@ -679,11 +777,12 @@ const TOOLS: ToolDefinition[] = [
       if (rawPoints.length === 0) throw new ToolError('points needs at least one [x, y] position.');
       let sketch = createSketch(plane);
       const ids: string[] = [];
+      const smoothSet = smoothIndices(args.smooth, rawPoints.length, 'smooth');
       rawPoints.forEach((item, i) => {
         if (!Array.isArray(item) || item.length !== 2 || !item.every((n) => typeof n === 'number' && Number.isFinite(n))) {
           throw new ToolError(`points[${i}] must be [x, y] with two finite numbers.`);
         }
-        const added = addSketchPoint(sketch, item[0], item[1]);
+        const added = addSketchPoint(sketch, item[0], item[1], smoothSet.has(i));
         sketch = added.sketch;
         ids.push(added.pointId);
       });
@@ -752,26 +851,24 @@ const TOOLS: ToolDefinition[] = [
           type: 'array',
           items: { type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'integer', minimum: 0 }] }, minItems: 2, maxItems: 2 },
         },
-        plane: { type: 'string', enum: [...SKETCH_PLANES] },
-        shape: {
-          type: 'object',
-          properties: {
-            mode: { type: 'string', enum: [...SHAPE_MODES] },
-            depth: { type: 'number', minimum: 0 },
-            segments: { type: 'integer', minimum: 3, maximum: 256 },
-            mirror: { type: 'boolean' },
-          },
-          additionalProperties: false,
-        },
+        smooth_points: { type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'integer', minimum: 0 }] }, description: 'Dots to make smooth (curved)' },
+        sharp_points: { type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'integer', minimum: 0 }] }, description: 'Dots to make sharp corners' },
+        view: { type: 'string', enum: [...BODY_VIEWS], description: 'For a body: which drawing to edit (side, top or front). Required for bodies.' },
+        plane: { type: 'string', enum: [...SKETCH_PLANES], description: 'Blueprints only: move the drawing to another plane' },
+        shape: shapeSchema,
+        body: bodySchema,
       },
       required: ['object'],
       additionalProperties: false,
     },
     annotations: edit,
     run(args, ctx) {
-      const object = resolveBlueprint(sceneOf(ctx), args.object);
+      const object = resolveDrawn(sceneOf(ctx), args.object);
       const before = object.source;
-      let sketch = before.sketch;
+      const view = optEnum(args, 'view', BODY_VIEWS) as BodyView | undefined;
+      if (before.type === 'body' && !view) throw new ToolError(`${object.name} is a body: say which drawing to edit with view (side, top or front).`);
+      const original = before.type === 'body' ? before.views[view!] : before.sketch;
+      let sketch = original;
       const guard = <T>(label: string, fn: () => T): T => {
         try {
           return fn();
@@ -813,25 +910,163 @@ const TOOLS: ToolDefinition[] = [
         const b = ref(line[1], `add_lines[${i}][1]`);
         sketch = guard(`add_lines[${i}]`, () => addSketchLine(sketch, a, b).sketch);
       });
-      const plane = optEnum(args, 'plane', SKETCH_PLANES);
-      if (plane) sketch = setPlane(sketch, plane);
-      const shape = readShape(args.shape, before.shape);
-      if (sketch === before.sketch && JSON.stringify(shape) === JSON.stringify(before.shape)) return result(`Nothing changed on ${object.name}.`);
-      const after = { type: 'sketch' as const, sketch, shape };
-      apply(ctx, new SetSourceCommand(object.id, before, after, `AI: edit blueprint ${object.name}`));
-      return result(`Edited ${object.name}.`, { addedPointIds: newIds, ...blueprintSummary({ ...object, source: after }) });
+      const smoothRefs = (key: string) => ((optArray(args, key, MAX_VERTICES) ?? []) as unknown[]).map((value, i) => ref(value, `${key}[${i}]`));
+      sketch = setPointsSmooth(sketch, smoothRefs('smooth_points'), true);
+      sketch = setPointsSmooth(sketch, smoothRefs('sharp_points'), false);
+      let after: MeshSource;
+      if (before.type === 'body') {
+        if (args.plane !== undefined || args.shape !== undefined) throw new ToolError('plane and shape are for blueprints; bodies use view and body settings.');
+        const body = readBodySettings(args.body, before.body);
+        if (sketch === original && JSON.stringify(body) === JSON.stringify(before.body)) return result(`Nothing changed on ${object.name}.`);
+        after = { type: 'body', views: { ...before.views, [view!]: sketch }, body };
+      } else {
+        if (args.body !== undefined) throw new ToolError('body settings are for bodies; blueprints use shape.');
+        const plane = optEnum(args, 'plane', SKETCH_PLANES);
+        if (plane) sketch = setPlane(sketch, plane);
+        const shape = readShape(args.shape, before.shape);
+        if (sketch === original && JSON.stringify(shape) === JSON.stringify(before.shape)) return result(`Nothing changed on ${object.name}.`);
+        after = { type: 'sketch', sketch, shape };
+      }
+      apply(ctx, new SetSourceCommand(object.id, before, after, `AI: edit ${object.name}${view ? ` (${view} view)` : ''}`));
+      const edited = { ...object, source: after } as SketchMesh | BodyMesh;
+      return result(`Edited ${object.name}.`, {
+        addedPointIds: newIds,
+        ...(edited.source.type === 'body' ? bodySummary(edited as BodyMesh) : blueprintSummary(edited as SketchMesh)),
+      });
+    },
+  },
+  {
+    name: 'create_body',
+    title: 'Loft a body from three views',
+    description:
+      'Builds a smooth closed body from three outlines, the way car designers work from blueprints: the side view (length and height), the top view (length and width) and an optional front view (the cross-section shape). ' +
+      'Use it for car bodies, cabins, aircraft fuselages, boat hulls and helmets. Coordinates: side view [x, y] has x = -Z (the front of the object, +Z, is on the left) and y = up; ' +
+      'top view [x, y] has x = X and y = -Z (front at the bottom); front view [x, y] has x = X and y = up. The side view is a closed outline. With symmetric (default true) the top and front views ' +
+      'are the right half only (x >= 0), drawn from the centre line round to the centre line. Notches cut up into the bottom of the side outline make wheel arches. smooth (default true) curves the outlines through the dots. ' +
+      'Build a car from several bodies (body, cabin) plus revolved wheels; add_template shows complete examples.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        side: { type: 'array', items: point2, minItems: 3, description: 'Side view outline [x = -Z, y = up], closed' },
+        top: { type: 'array', items: point2, minItems: 2, description: 'Top view outline [x = X, y = -Z]: right half when symmetric' },
+        front: { type: 'array', items: point2, description: 'Optional front view cross-section [x = X, y = up]: right half when symmetric' },
+        smooth: { type: 'boolean', description: 'Curve the outlines through every dot (default true)' },
+        body: bodySchema,
+        ...transformProps,
+        color,
+        parent: objectRef('Optional parent object id or name'),
+      },
+      required: ['name', 'side', 'top'],
+      additionalProperties: false,
+    },
+    annotations: edit,
+    run(args, ctx) {
+      const scene = sceneOf(ctx);
+      const body = readBodySettings(args.body, DEFAULT_BODY);
+      const smooth = optBool(args, 'smooth') ?? true;
+      const empty = createBodyViews();
+      const read = (key: 'side' | 'top' | 'front', closed: boolean) => {
+        const list = optArray(args, key, MAX_VERTICES);
+        return list && list.length ? drawingFromArgs(key, list, key, closed, smooth).sketch : empty[key];
+      };
+      const views: BodyViews = { side: read('side', true), top: read('top', !body.symmetric), front: read('front', !body.symmetric) };
+      const base = createBodyObject({
+        name: uniqueName(scene, reqString(args, 'name')),
+        views,
+        body,
+        color: optColor(args, 'color') ?? BLUEPRINT_COLORS[Object.keys(scene.objects).length % BLUEPRINT_COLORS.length],
+      });
+      const object: MeshObject = { ...base, transform: applyTransformArgs(base.transform, args) };
+      apply(ctx, new AddObjectsCommand([object], parentFromArgs(scene, args), undefined, `AI: loft ${object.name}`));
+      const summary = bodySummary(object as BodyMesh);
+      return result(summary.missing ? `Created ${object.name} (${object.id}), but ${String(summary.missing)}` : `Lofted ${object.name} (${object.id}).`, { id: object.id, ...summary });
+    },
+  },
+  {
+    name: 'add_template',
+    title: 'Add a ready-made model',
+    description:
+      'Adds a complete, fully editable model built from bodies and blueprints: supercar (low mid-engine sports car) or saloon (long luxury limousine). ' +
+      'Every part (body, cabin, lights, wheels with tyres, rims and spokes) can be reshaped afterwards with edit_blueprint. A good starting point for cars.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        template: { type: 'string', enum: TEMPLATES.map((t) => t.id) },
+        name: { type: 'string' },
+        position: vec3('Where to put it, in metres; it rests on the ground'),
+        color: { type: 'string', description: 'Paint colour for the body, for example #c0392b' },
+      },
+      required: ['template'],
+      additionalProperties: false,
+    },
+    annotations: edit,
+    run(args, ctx) {
+      const scene = sceneOf(ctx);
+      const id = reqEnum<TemplateId>(args, 'template', TEMPLATES.map((t) => t.id));
+      const position = optVec3(args, 'position');
+      let objects = createTemplate(id, { groundPosition: position ? [position[0], position[2]] : [0, 0] });
+      const paint = optColor(args, 'color');
+      objects = objects.map((o, i) => {
+        if (i === 0) return { ...o, name: uniqueName(scene, optString(args, 'name') ?? getTemplate(id).name) };
+        if (paint && o.kind === 'mesh' && o.name === 'Body' && o.parentId === objects[0].id) return { ...o, material: { ...o.material, color: paint } };
+        return o;
+      });
+      apply(ctx, new AddObjectsCommand(objects, null, undefined, `AI: add ${objects[0].name}`));
+      return result(`Added ${objects[0].name} (${objects[0].id}) with ${objects.length - 1} parts.`, tree(sceneOf(ctx), [objects[0].id]));
+    },
+  },
+  {
+    name: 'set_modifiers',
+    title: 'Smooth and mirror a mesh',
+    description:
+      'Non-destructive finishing for any mesh: subdivide (0 to 3 levels of Catmull-Clark smoothing, which rounds blocky point-built shapes into organic ones), ' +
+      'mirror (copy the mesh across its local x, y or z = 0 plane and join the halves, so you can model one half), and smooth_shading (curved surfaces look round). ' +
+      'The editable source is unchanged; values you leave out stay as they are.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        object: objectRef(),
+        subdivide: { type: 'integer', minimum: 0, maximum: MAX_SUBDIVISION },
+        mirror: { type: 'string', enum: [...MIRROR_AXES] },
+        smooth_shading: { type: 'boolean' },
+      },
+      required: ['object'],
+      additionalProperties: false,
+    },
+    annotations: edit,
+    run(args, ctx) {
+      const object = resolveObject(sceneOf(ctx), args.object);
+      if (object.kind !== 'mesh') throw new ToolError(`${object.name} is a group; modifiers work on meshes.`);
+      const current = object.modifiers ?? NO_MODIFIERS;
+      const modifiers = cleanModifiers({
+        mirror: optEnum(args, 'mirror', MIRROR_AXES) ?? current.mirror,
+        subdivide: args.subdivide === undefined ? current.subdivide : Number(args.subdivide),
+      });
+      const smooth = optBool(args, 'smooth_shading') ?? !!object.material.smooth;
+      apply(
+        ctx,
+        new SetMeshLookCommand(
+          object.id,
+          { modifiers: object.modifiers, smooth: !!object.material.smooth },
+          { modifiers: hasModifiers(modifiers) ? modifiers : undefined, smooth },
+          `AI: modifiers on ${object.name}`,
+        ),
+      );
+      const updated = sceneOf(ctx).objects[object.id];
+      return result(`Updated ${object.name}.`, { ...describe(updated), geometry: reportSummary(analyzeGraph(meshGraphOf(updated)!)) });
     },
   },
   {
     name: 'convert_to_points',
     title: 'Convert blueprint to points',
     description:
-      'Turns a blueprint into a point-built object with its current 3D shape, so individual vertices can be edited with edit_point_mesh. The drawing is no longer used afterwards (undo restores it).',
+      'Turns a blueprint or body into a point-built object with its current 3D shape, so individual vertices can be edited with edit_point_mesh. The drawings are no longer used afterwards (undo restores them). Modifiers stay on.',
     inputSchema: { type: 'object', properties: { object: objectRef() }, required: ['object'], additionalProperties: false },
     annotations: edit,
     run(args, ctx) {
-      const object = resolveBlueprint(sceneOf(ctx), args.object);
-      const graph = generateShape(object.source.sketch, object.source.shape).graph;
+      const object = resolveDrawn(sceneOf(ctx), args.object);
+      const graph = sourceGraphOf(object)!;
       apply(ctx, new SetSourceCommand(object.id, object.source, { type: 'construction', graph }, `AI: convert ${object.name} to points`));
       const counts = analyzeGraph(graph);
       return result(`${object.name} is now point-built with ${counts.vertices} vertices and ${counts.faces} faces.`);

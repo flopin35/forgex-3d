@@ -51,6 +51,18 @@ export function buildConstructionBuffers(graph: ConstructionGraph, options: Mesh
   return { faces, edges, points, vertexIds: data.vertexIds, triangleCount: data.triangleCount };
 }
 
+/** Just the vertex points of a graph (points mode on an object whose shown mesh is modified). */
+export function buildPointBuffers(graph: ConstructionGraph): { points: THREE.BufferGeometry; vertexIds: string[] } {
+  const vertexIds = Object.keys(graph.vertices);
+  const positions = new Float32Array(vertexIds.length * 3);
+  vertexIds.forEach((id, i) => positions.set(graph.vertices[id].position, i * 3));
+  const points = new THREE.BufferGeometry();
+  points.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  points.setAttribute('color', new THREE.BufferAttribute(new Float32Array(vertexIds.length * 3), 3));
+  points.computeBoundingSphere();
+  return { points, vertexIds };
+}
+
 /** A ground grid: fine lines every cell, stronger lines every 4 cells, and coloured X and Z axes. */
 export function buildGrid(cell: number, cellsPerSide = 40): THREE.Group {
   const group = new THREE.Group();

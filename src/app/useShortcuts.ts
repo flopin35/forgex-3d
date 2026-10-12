@@ -56,6 +56,12 @@ export function useShortcuts(actions: EditorActions): void {
         case 'd':
           boardStore.setTool('draw');
           break;
+        case 'c':
+          boardStore.setTool('curve');
+          break;
+        case 's':
+          if (!actions.toggleSmoothPicked()) return;
+          break;
         case 'v':
           boardStore.setTool('select');
           break;

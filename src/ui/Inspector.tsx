@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { boardStore } from '../app/boardState';
+import { isDrawn, type DrawnObject } from '../app/drawing';
 import { useActions, useEditor } from '../app/EditorContext';
 import { perfStats } from '../app/perfStats';
 import { analyzeGraph } from '../core/geometry/analysis';
 import { moveVertex, type ConstructionGraph } from '../core/geometry/constructionGraph';
+import { MIRROR_AXES } from '../core/geometry/modifiers';
 import type { Transform } from '../core/math/transform';
 import type { Vec3 } from '../core/math/vec3';
 import { PROJECT_FORMAT_VERSION } from '../core/project/projectFile';
-import { HEX_COLOR, isConstructionMesh, isSketchMesh, meshGraphOf, type MeshObject, type MeshSource, type SceneObject } from '../core/scene/types';
+import { HEX_COLOR, isConstructionMesh, meshGraphOf, type MeshObject, type SceneObject } from '../core/scene/types';
+import { BODY_VIEWS } from '../core/sketch/body';
 import { SKETCH_PLANES, type SketchPlane } from '../core/sketch/sketch';
 import { METERS_PER_ROBLOX_STUD } from '../core/units';
 import { Icon } from './icons';
 import { NumberField } from './NumberField';
-import { ShapeControls } from './ShapeCard';
+import { DrawnControls, FinishControls } from './ShapeCard';
 
 const SHAPE_NAMES = { flat: 'flat', extrude: 'extruded', revolve: 'revolved' } as const;
 const PLANE_NAMES: Record<SketchPlane, string> = { front: 'Front', side: 'Side', top: 'Top' };
@@ -37,6 +41,7 @@ function describeKind(object: SceneObject): string {
   if (object.kind === 'group') return 'Group';
   if (object.source.type === 'primitive') return `Parametric ${object.source.primitive}`;
   if (object.source.type === 'sketch') return `Blueprint, ${SHAPE_NAMES[object.source.shape.mode]}${object.source.shape.mirror && object.source.shape.mode !== 'revolve' ? ' and mirrored' : ''}`;
+  if (object.source.type === 'body') return 'Body lofted from side, top and front views';
   return 'Point-built mesh';
 }
 
@@ -61,10 +66,11 @@ function ObjectProperties({ object }: { object: SceneObject }) {
         <span className="kind-label">{describeKind(object)}</span>
       </div>
       <TransformSection object={object} />
-      {isSketchMesh(object) && <BlueprintSection object={object} />}
+      {isDrawn(object) && <DrawingSection object={object} />}
       {object.kind === 'mesh' && <AppearanceSection object={object} />}
+      {object.kind === 'mesh' && !isDrawn(object) && object.source.type === 'construction' && <FinishSection object={object} />}
       {isConstructionMesh(object) && <GeometrySection object={object} />}
-      {isSketchMesh(object) && <GeneratedGeometrySection object={object} />}
+      {object.kind === 'mesh' && (isDrawn(object) || !!object.modifiers) && <GeneratedGeometrySection object={object} />}
       <section className="inspector-section">
         <div className="section-actions">
           <button type="button" className="text-button" onClick={actions.duplicateSelection}>
@@ -335,8 +341,27 @@ function GeometrySection({ object }: { object: MeshObject & { source: { type: 'c
   );
 }
 
-function BlueprintSection({ object }: { object: MeshObject & { source: Extract<MeshSource, { type: 'sketch' }> } }) {
+function DrawingSection({ object }: { object: DrawnObject }) {
   const actions = useActions();
+  if (object.source.type === 'body') {
+    const { views } = object.source;
+    return (
+      <section className="inspector-section">
+        <h3>Body</h3>
+        <p className="hint">
+          Lofted from {BODY_VIEWS.map((view) => `${Object.keys(views[view].points).length} ${view}`).join(', ')} dots. Pick a view tab on the board to edit it.
+        </p>
+        <div className="section-actions">
+          {BODY_VIEWS.map((view) => (
+            <button key={view} type="button" className="text-button" onClick={() => boardStore.set({ bodyView: view })}>
+              <Icon name="pen" size={14} /> {view[0].toUpperCase() + view.slice(1)} view
+            </button>
+          ))}
+        </div>
+        <DrawnControls object={object} compact />
+      </section>
+    );
+  }
   const { sketch } = object.source;
   return (
     <section className="inspector-section">
@@ -361,12 +386,41 @@ function BlueprintSection({ object }: { object: MeshObject & { source: Extract<M
       <p className="hint">
         {Object.keys(sketch.points).length} dots and {Object.keys(sketch.lines).length} lines. Edit the drawing on the board.
       </p>
-      <ShapeControls blueprint={object} compact />
+      <DrawnControls object={object} compact />
     </section>
   );
 }
 
-/** Read-only stats for a generated (blueprint) mesh. */
+/** Smooth shading, subdivision and mirror for point-built meshes (box modelling). */
+function FinishSection({ object }: { object: MeshObject }) {
+  const actions = useActions();
+  const mirror = object.modifiers?.mirror ?? 'none';
+  return (
+    <section className="inspector-section">
+      <h3>Finish</h3>
+      <FinishControls object={object} />
+      <div className="option-row" title="Model one half: the mesh is copied across its local axis and joined">
+        <span className="slider-label">Mirror</span>
+        <div className="segmented is-small" role="radiogroup" aria-label="Mirror axis">
+          {MIRROR_AXES.map((axis) => (
+            <button
+              key={axis}
+              type="button"
+              role="radio"
+              aria-checked={mirror === axis}
+              className={mirror === axis ? 'is-active' : ''}
+              onClick={() => actions.setMeshLook(object.id, { modifiers: { mirror: axis } })}
+            >
+              {axis === 'none' ? 'Off' : axis.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Read-only stats for a generated or modified mesh (what is shown and exported). */
 function GeneratedGeometrySection({ object }: { object: MeshObject }) {
   const graph = meshGraphOf(object);
   const report = useMemo(() => (graph ? analyzeGraph(graph) : null), [graph]);

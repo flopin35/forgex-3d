@@ -2,7 +2,10 @@ import { buildCubeGraph, buildPlaneGraph } from '../geometry/builders';
 import { createObjectId } from '../ids';
 import { identityTransform } from '../math/transform';
 import type { Vec3 } from '../math/vec3';
+import type { MeshModifiers } from '../geometry/modifiers';
+import { clampBody, createBodyViews, DEFAULT_BODY, type BodySettings, type BodyViews } from '../sketch/body';
 import { clampShape, createSketch, DEFAULT_SHAPE, type ShapeSettings, type Sketch, type SketchPlane } from '../sketch/sketch';
+import type { Transform } from '../math/transform';
 import type { MeshObject, SceneObject } from './types';
 
 export type PartId = 'cube' | 'plane' | 'sphere' | 'cylinder' | 'group';
@@ -76,29 +79,53 @@ export interface CreatePartOptions {
 
 export const BLUEPRINT_COLORS = ['#3d9fe8', '#e4a23c', '#55b888', '#e0565b', '#a77be0', '#62cbff'];
 
-/** A blueprint object: a drawing on a plane that becomes 3D through its shape settings. */
-export function createBlueprintObject(options: {
+interface GeneratedObjectOptions {
   name: string;
-  sketch?: Sketch;
-  plane?: SketchPlane;
-  shape?: Partial<ShapeSettings>;
   color?: string;
   id?: string;
-}): MeshObject {
+  /** Smooth shading (default on: curves look round, sharp creases stay sharp). */
+  smooth?: boolean;
+  transform?: Partial<Transform>;
+  modifiers?: MeshModifiers;
+}
+
+function generatedBase(options: GeneratedObjectOptions) {
   return {
     id: options.id ?? createObjectId(),
     name: options.name,
-    kind: 'mesh',
+    kind: 'mesh' as const,
     parentId: null,
     childIds: [],
     visible: true,
-    transform: identityTransform(),
-    material: { color: options.color ?? BLUEPRINT_COLORS[0] },
+    transform: { ...identityTransform(), ...options.transform },
+    material: options.smooth === false ? { color: options.color ?? BLUEPRINT_COLORS[0] } : { color: options.color ?? BLUEPRINT_COLORS[0], smooth: true as const },
+    ...(options.modifiers ? { modifiers: options.modifiers } : {}),
+  };
+}
+
+/** A blueprint object: a drawing on a plane that becomes 3D through its shape settings. */
+export function createBlueprintObject(
+  options: GeneratedObjectOptions & {
+    sketch?: Sketch;
+    plane?: SketchPlane;
+    shape?: Partial<ShapeSettings>;
+  },
+): MeshObject {
+  return {
+    ...generatedBase(options),
     source: {
       type: 'sketch',
       sketch: options.sketch ?? createSketch(options.plane ?? 'front'),
       shape: clampShape({ ...DEFAULT_SHAPE, ...options.shape }),
     },
+  };
+}
+
+/** A body object: side, top and front drawings lofted into one smooth solid. */
+export function createBodyObject(options: GeneratedObjectOptions & { views?: BodyViews; body?: Partial<BodySettings> }): MeshObject {
+  return {
+    ...generatedBase(options),
+    source: { type: 'body', views: options.views ?? createBodyViews(), body: clampBody({ ...DEFAULT_BODY, ...options.body }) },
   };
 }
 

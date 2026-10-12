@@ -20,12 +20,13 @@ import {
 } from '../core/math/transform';
 import { cleanVec3, equals, type Vec3 } from '../core/math/vec3';
 import type { CameraState, ProjectSettings } from '../core/project/projectFile';
-import { meshGraphOf, type Scene, type SceneObject } from '../core/scene/types';
-import { buildConstructionBuffers, buildGrid, disposeObjectTree, PrimitiveGeometryCache } from './geometryFactory';
+import { meshGraphOf, SMOOTH_SHADING_ANGLE, sourceGraphOf, type Scene, type SceneObject } from '../core/scene/types';
+import { buildConstructionBuffers, buildGrid, buildPointBuffers, disposeObjectTree, PrimitiveGeometryCache } from './geometryFactory';
 
 const ACCENT = 0x38b2ff;
 const EDGE_COLOR = 0x08111d;
 const VERTEX_COLOR = new THREE.Color(0xdfe8f3);
+const CAGE_COLOR = 0xffb02e;
 const VERTEX_SELECTED_COLOR = new THREE.Color(0xffb02e);
 const DEFAULT_CAMERA: CameraState = { position: [2.7, 2.1, 3.6], target: [0, 0.75, 0] };
 const TURNTABLE_SPEED = 1.6;
@@ -40,9 +41,15 @@ interface ObjectNode {
   object: THREE.Object3D;
   mesh: THREE.Mesh | null;
   material: THREE.MeshStandardMaterial | null;
+  /** The editable (source) graph: what points mode picks and moves. */
   graph: ConstructionGraph | null;
+  /** The graph shown, after modifiers. */
+  shownGraph: ConstructionGraph | null;
+  smooth: boolean;
   edges: THREE.LineSegments | null;
   points: THREE.Points | null;
+  /** The editable cage drawn in points mode when modifiers reshape the mesh (box modelling). */
+  cage: THREE.LineSegments | null;
   vertexIds: string[];
   outline: THREE.Mesh | null;
   triangles: number;
@@ -358,8 +365,11 @@ export class ViewportEngine implements ViewportApi {
       mesh: null,
       material: null,
       graph: null,
+      shownGraph: null,
+      smooth: false,
       edges: null,
       points: null,
+      cage: null,
       vertexIds: [],
       outline: null,
       triangles: 0,
@@ -397,7 +407,13 @@ export class ViewportEngine implements ViewportApi {
         );
         node.points.renderOrder = 10;
         node.points.visible = false;
-        node.mesh.add(node.edges, node.points);
+        node.cage = new THREE.LineSegments(
+          new THREE.BufferGeometry(),
+          new THREE.LineBasicMaterial({ color: CAGE_COLOR, transparent: true, opacity: 0.85, depthTest: false }),
+        );
+        node.cage.renderOrder = 9;
+        node.cage.visible = false;
+        node.mesh.add(node.edges, node.points, node.cage);
       }
     }
     node.object.userData.objectId = object.id;
@@ -413,23 +429,44 @@ export class ViewportEngine implements ViewportApi {
     node.object.scale.set(scale[0], scale[1], scale[2]);
     if (object.kind !== 'mesh' || !node.material) return;
     node.material.color.set(object.material.color);
-    // Blueprint meshes are generated (and cached) from the drawing, so an unchanged drawing keeps the same graph.
-    const graph = meshGraphOf(object);
-    if (graph && graph !== node.graph) this.rebuildConstruction(node, graph, object.source.type === 'sketch');
+    // Generated graphs are cached, so an unchanged drawing or modifier keeps the same graph object.
+    const graph = sourceGraphOf(object);
+    const shown = meshGraphOf(object);
+    const smooth = !!object.material.smooth;
+    if (graph && shown && (graph !== node.graph || shown !== node.shownGraph || smooth !== node.smooth)) {
+      this.rebuildConstruction(node, graph, shown, object.source.type !== 'construction', smooth);
+    }
   }
 
-  private rebuildConstruction(node: ObjectNode, graph: ConstructionGraph, generated: boolean): void {
+  private rebuildConstruction(node: ObjectNode, graph: ConstructionGraph, shown: ConstructionGraph, generated: boolean, smooth: boolean): void {
     const start = performance.now();
-    // Generated meshes hide the seams inside flat caps; point-built meshes show every edge the user made.
-    const buffers = buildConstructionBuffers(graph, { featureEdgesOnly: generated });
+    // Generated or modified meshes hide the seams inside flat areas; plain point-built meshes show every edge the user made.
+    const buffers = buildConstructionBuffers(shown, {
+      featureEdgesOnly: generated || shown !== graph,
+      smoothAngle: smooth ? SMOOTH_SHADING_ANGLE : 0,
+    });
     node.mesh!.geometry.dispose();
     node.mesh!.geometry = buffers.faces;
     node.edges!.geometry.dispose();
     node.edges!.geometry = buffers.edges;
+    // Points mode always works on the editable graph, even when modifiers change what is shown.
+    const points = shown === graph ? { points: buffers.points, vertexIds: buffers.vertexIds } : buildPointBuffers(graph);
+    if (points.points !== buffers.points) buffers.points.dispose();
     node.points!.geometry.dispose();
-    node.points!.geometry = buffers.points;
-    node.vertexIds = buffers.vertexIds;
+    node.points!.geometry = points.points;
+    node.cage!.geometry.dispose();
+    if (shown === graph) {
+      node.cage!.geometry = new THREE.BufferGeometry();
+    } else {
+      const cage = buildConstructionBuffers(graph);
+      cage.faces.dispose();
+      cage.points.dispose();
+      node.cage!.geometry = cage.edges;
+    }
+    node.vertexIds = points.vertexIds;
     node.graph = graph;
+    node.shownGraph = shown;
+    node.smooth = smooth;
     node.triangles = buffers.triangleCount;
     this.colorVertices(node, this.lastState?.selectedVertexId ?? null);
     perfStats.report({ rebuildMs: performance.now() - start });
@@ -445,6 +482,8 @@ export class ViewportEngine implements ViewportApi {
     (node.edges?.material as THREE.Material | undefined)?.dispose();
     node.points?.geometry.dispose();
     (node.points?.material as THREE.Material | undefined)?.dispose();
+    node.cage?.geometry.dispose();
+    (node.cage?.material as THREE.Material | undefined)?.dispose();
     node.object.children
       .filter((child) => child.name === 'group-marker')
       .forEach((marker) => disposeObjectTree(marker));
@@ -532,6 +571,7 @@ export class ViewportEngine implements ViewportApi {
       material.opacity = selected ? 1 : 0.6;
     }
     if (node.points) node.points.visible = selected && pointsMode;
+    if (node.cage) node.cage.visible = selected && pointsMode && node.shownGraph !== node.graph;
     if (node.mesh && !node.graph && node.sourceKey !== 'construction') {
       if (selected && !node.outline) {
         node.outline = new THREE.Mesh(node.mesh.geometry, this.outlineMaterial);

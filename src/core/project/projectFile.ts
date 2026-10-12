@@ -1,14 +1,17 @@
 import { analyzeGraph } from '../geometry/analysis';
 import { graphFromJson, graphToJson, type ConstructionGraphJson } from '../geometry/graphJson';
+import { cleanModifiers, hasModifiers, MIRROR_AXES, type MeshModifiers, type MirrorAxis } from '../geometry/modifiers';
 import { isFiniteNumber, isVec3, type Vec3 } from '../math/vec3';
 import type { Transform } from '../math/transform';
-import { HEX_COLOR, meshGraphOf, PRIMITIVE_KINDS, type MeshSource, type PrimitiveKind, type Scene, type SceneObject } from '../scene/types';
-import { sketchFromJson, sketchToJson, type SketchJson } from '../sketch/sketchJson';
+import { HEX_COLOR, PRIMITIVE_KINDS, type MaterialSettings, type MeshSource, type PrimitiveKind, type Scene, type SceneObject } from '../scene/types';
+import { BODY_VIEWS, clampBody, type BodySettings, type BodyViews } from '../sketch/body';
+import { sketchFromJson, sketchToJson, viewFromJson, viewToJson, type SketchJson, type SketchViewJson } from '../sketch/sketchJson';
+import { readReferences, type ReferenceImage } from './references';
 import { WORLD_CONVENTIONS } from '../units';
 import { APP_NAME, APP_VERSION } from '../version';
 
 export const PROJECT_FORMAT = 'forgex-project';
-export const PROJECT_FORMAT_VERSION = 2;
+export const PROJECT_FORMAT_VERSION = 3;
 export const PROJECT_EXTENSION = 'forgex';
 
 export interface ProjectSettings {
@@ -28,6 +31,8 @@ export interface ProjectDocument {
   scene: Scene;
   settings: ProjectSettings;
   camera: CameraState | null;
+  /** Pictures to trace over on the board. Absent when there are none. */
+  references?: readonly ReferenceImage[];
 }
 
 export const DEFAULT_SETTINGS: ProjectSettings = { gridSize: 0.25, snapEnabled: true, rotationSnapDegrees: 15 };
@@ -35,7 +40,8 @@ export const DEFAULT_SETTINGS: ProjectSettings = { gridSize: 0.25, snapEnabled: 
 type SerializedSource =
   | { type: 'primitive'; primitive: PrimitiveKind }
   | ({ type: 'construction' } & ConstructionGraphJson)
-  | ({ type: 'sketch' } & SketchJson);
+  | ({ type: 'sketch' } & SketchJson)
+  | { type: 'body'; views: Record<'side' | 'top' | 'front', SketchViewJson>; body: BodySettings };
 
 interface SerializedObject {
   id: string;
@@ -45,20 +51,26 @@ interface SerializedObject {
   childIds: string[];
   visible: boolean;
   transform: Transform;
-  material?: { color: string };
+  material?: { color: string; smooth?: true };
+  modifiers?: MeshModifiers;
   source?: SerializedSource;
 }
 
-/** The current file format (version 2 added blueprint objects). See docs/forgex-format.md. */
-export interface ProjectFileV2 {
+/**
+ * The current file format. Version 2 added blueprints; version 3 added smooth dots,
+ * bodies lofted from three views, modifiers, smooth shading and reference pictures.
+ * See docs/forgex-format.md.
+ */
+export interface ProjectFileV3 {
   format: typeof PROJECT_FORMAT;
-  version: 2;
+  version: 3;
   generator: string;
   savedAt: string;
   units: typeof WORLD_CONVENTIONS;
   settings: ProjectSettings;
   scene: { rootIds: string[]; objects: SerializedObject[] };
   camera?: CameraState;
+  references?: ReferenceImage[];
 }
 
 function serializeSource(source: MeshSource): SerializedSource {
@@ -69,6 +81,12 @@ function serializeSource(source: MeshSource): SerializedSource {
       return { type: 'construction', ...graphToJson(source.graph) };
     case 'sketch':
       return { type: 'sketch', ...sketchToJson(source.sketch, source.shape) };
+    case 'body':
+      return {
+        type: 'body',
+        views: { side: viewToJson(source.views.side), top: viewToJson(source.views.top), front: viewToJson(source.views.front) },
+        body: { ...source.body },
+      };
   }
 }
 
@@ -87,7 +105,8 @@ function serializeObject(object: SceneObject): SerializedObject {
     },
   };
   if (object.kind === 'mesh') {
-    base.material = { color: object.material.color };
+    base.material = object.material.smooth ? { color: object.material.color, smooth: true } : { color: object.material.color };
+    if (hasModifiers(object.modifiers)) base.modifiers = { ...object.modifiers! };
     base.source = serializeSource(object.source);
   }
   return base;
@@ -107,7 +126,7 @@ function orderedObjects(scene: Scene): SceneObject[] {
 }
 
 export function serializeProject(document: ProjectDocument, now: Date = new Date()): string {
-  const file: ProjectFileV2 = {
+  const file: ProjectFileV3 = {
     format: PROJECT_FORMAT,
     version: PROJECT_FORMAT_VERSION,
     generator: `${APP_NAME} ${APP_VERSION}`,
@@ -120,6 +139,7 @@ export function serializeProject(document: ProjectDocument, now: Date = new Date
     },
   };
   if (document.camera) file.camera = { position: [...document.camera.position], target: [...document.camera.target] };
+  if (document.references?.length) file.references = document.references.map((reference) => ({ ...reference }));
   return `${JSON.stringify(file, null, 2)}\n`;
 }
 
@@ -137,6 +157,8 @@ export type Migration = (data: RawProject) => RawProject;
 export const PROJECT_MIGRATIONS: Readonly<Record<number, Migration>> = {
   // Version 2 added blueprint objects ("sketch" sources). Version 1 files need no changes.
   1: (data) => data,
+  // Version 3 added optional fields only (smooth dots, bodies, modifiers, shading, references).
+  2: (data) => data,
 };
 
 export function migrateProjectData(
@@ -217,7 +239,18 @@ function readSource(raw: unknown, at: string, errors: string[]): MeshSource | nu
     const blueprint = sketchFromJson(raw, at, errors);
     return blueprint ? { type: 'sketch', ...blueprint } : null;
   }
-  errors.push(`${at}.type must be "primitive", "construction" or "sketch".`);
+  if (raw.type === 'body') {
+    if (!isRecord(raw.views)) {
+      errors.push(`${at}.views must hold the side, top and front drawings.`);
+      return null;
+    }
+    const start = errors.length;
+    const views: Partial<Record<'side' | 'top' | 'front', ReturnType<typeof viewFromJson>>> = {};
+    for (const view of BODY_VIEWS) views[view] = viewFromJson(raw.views[view], view, `${at}.views.${view}`, errors);
+    if (errors.length > start || !views.side || !views.top || !views.front) return null;
+    return { type: 'body', views: views as BodyViews, body: clampBody(isRecord(raw.body) ? (raw.body as Partial<BodySettings>) : {}) };
+  }
+  errors.push(`${at}.type must be "primitive", "construction", "sketch" or "body".`);
   return null;
 }
 
@@ -238,15 +271,26 @@ function readObject(raw: unknown, at: string, errors: string[]): SceneObject | n
   if (typeof visible !== 'boolean') errors.push(`${at}.visible must be true or false.`);
   const transform = readTransform(raw.transform, `${at}.transform`, errors);
 
-  let mesh: { source: MeshSource; material: { color: string } } | null = null;
+  let mesh: { source: MeshSource; material: MaterialSettings; modifiers?: MeshModifiers } | null = null;
   if (kind === 'mesh') {
     const material = raw.material;
     if (!isRecord(material) || typeof material.color !== 'string' || !HEX_COLOR.test(material.color)) {
       errors.push(`${at}.material.color must be a colour like #3d9fe8.`);
     }
+    let modifiers: MeshModifiers | undefined;
+    if (raw.modifiers !== undefined) {
+      const m = raw.modifiers;
+      if (!isRecord(m) || (m.mirror !== undefined && !MIRROR_AXES.includes(m.mirror as MirrorAxis)) || (m.subdivide !== undefined && !isFiniteNumber(m.subdivide))) {
+        errors.push(`${at}.modifiers must have mirror (none, x, y or z) and subdivide (0 to 3).`);
+      } else {
+        const cleaned = cleanModifiers(m as Partial<MeshModifiers>);
+        if (hasModifiers(cleaned)) modifiers = cleaned;
+      }
+    }
     const source = readSource(raw.source, `${at}.source`, errors);
     if (source && isRecord(material) && typeof material.color === 'string') {
-      mesh = { source, material: { color: material.color.toLowerCase() } };
+      const color = material.color.toLowerCase();
+      mesh = { source, material: material.smooth === true ? { color, smooth: true } : { color }, ...(modifiers ? { modifiers } : {}) };
     }
   }
   if (errors.length > start || !transform) return null;
@@ -364,14 +408,16 @@ export function parseProject(text: string): ParseResult {
     return { ok: false, errors: shown };
   }
 
+  // Hand-built geometry is checked; generated geometry (blueprints, bodies, modifiers) is rebuilt on load.
   for (const object of Object.values(objects)) {
-    const graph = meshGraphOf(object);
-    if (graph) {
-      for (const issue of analyzeGraph(graph).issues) {
-        if (issue.severity !== 'info') warnings.push(`${object.name}: ${issue.message}`);
-      }
+    if (object.kind !== 'mesh' || object.source.type !== 'construction') continue;
+    for (const issue of analyzeGraph(object.source.graph).issues) {
+      if (issue.severity !== 'info') warnings.push(`${object.name}: ${issue.message}`);
     }
   }
 
-  return { ok: true, document: { scene: { objects, rootIds }, settings, camera }, warnings, migratedFrom };
+  const references = readReferences(data.references, warnings);
+  const document: ProjectDocument = { scene: { objects, rootIds }, settings, camera };
+  if (references.length) document.references = references;
+  return { ok: true, document, warnings, migratedFrom };
 }

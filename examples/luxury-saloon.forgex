@@ -1,0 +1,3554 @@
+{
+  "format": "forgex-project",
+  "version": 3,
+  "generator": "FORGEX 3D 0.1.0",
+  "savedAt": "2026-10-12T18:34:29.955Z",
+  "units": {
+    "lengthUnit": "meters",
+    "upAxis": "+Y",
+    "forwardAxis": "+Z",
+    "handedness": "right",
+    "rotation": "degrees-xyz"
+  },
+  "settings": {
+    "gridSize": 0.25,
+    "snapEnabled": true,
+    "rotationSnapDegrees": 15
+  },
+  "scene": {
+    "rootIds": [
+      "obj_23dcc474dc3b335f"
+    ],
+    "objects": [
+      {
+        "id": "obj_23dcc474dc3b335f",
+        "name": "Luxury saloon",
+        "kind": "group",
+        "parentId": null,
+        "childIds": [
+          "obj_26fd8da50dca1966",
+          "obj_971a6450ba1acc27",
+          "obj_85b60369e53d4bc6",
+          "obj_a781baba2c3b4c54",
+          "obj_8f079ddad3ebb6e2",
+          "obj_5ec38eb48ece5f90"
+        ],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "obj_26fd8da50dca1966",
+        "name": "Body",
+        "kind": "mesh",
+        "parentId": "obj_23dcc474dc3b335f",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#1f2d4a",
+          "smooth": true
+        },
+        "source": {
+          "type": "body",
+          "views": {
+            "side": {
+              "points": [
+                {
+                  "id": "p1",
+                  "x": -2.86,
+                  "y": 0.32
+                },
+                {
+                  "id": "p2",
+                  "x": -2.88,
+                  "y": 0.95,
+                  "smooth": true
+                },
+                {
+                  "id": "p3",
+                  "x": -2.78,
+                  "y": 1.06
+                },
+                {
+                  "id": "p4",
+                  "x": -1.1,
+                  "y": 1.08
+                },
+                {
+                  "id": "p5",
+                  "x": 0.2,
+                  "y": 1.02,
+                  "smooth": true
+                },
+                {
+                  "id": "p6",
+                  "x": 1.9,
+                  "y": 1,
+                  "smooth": true
+                },
+                {
+                  "id": "p7",
+                  "x": 2.7,
+                  "y": 0.98
+                },
+                {
+                  "id": "p8",
+                  "x": 2.86,
+                  "y": 0.86,
+                  "smooth": true
+                },
+                {
+                  "id": "p9",
+                  "x": 2.84,
+                  "y": 0.4,
+                  "smooth": true
+                },
+                {
+                  "id": "p10",
+                  "x": 2.7,
+                  "y": 0.26
+                },
+                {
+                  "id": "p11",
+                  "x": 2.15,
+                  "y": 0.24
+                },
+                {
+                  "id": "p12",
+                  "x": 2.12,
+                  "y": 0.42,
+                  "smooth": true
+                },
+                {
+                  "id": "p13",
+                  "x": 1.9836999999999998,
+                  "y": 0.7536999999999999,
+                  "smooth": true
+                },
+                {
+                  "id": "p14",
+                  "x": 1.65,
+                  "y": 0.8899999999999999,
+                  "smooth": true
+                },
+                {
+                  "id": "p15",
+                  "x": 1.3163,
+                  "y": 0.7536999999999999,
+                  "smooth": true
+                },
+                {
+                  "id": "p16",
+                  "x": 1.18,
+                  "y": 0.42,
+                  "smooth": true
+                },
+                {
+                  "id": "p17",
+                  "x": 1.15,
+                  "y": 0.24
+                },
+                {
+                  "id": "p18",
+                  "x": -1.3,
+                  "y": 0.23
+                },
+                {
+                  "id": "p19",
+                  "x": -1.33,
+                  "y": 0.42,
+                  "smooth": true
+                },
+                {
+                  "id": "p20",
+                  "x": -1.4663000000000002,
+                  "y": 0.7536999999999999,
+                  "smooth": true
+                },
+                {
+                  "id": "p21",
+                  "x": -1.8,
+                  "y": 0.8899999999999999,
+                  "smooth": true
+                },
+                {
+                  "id": "p22",
+                  "x": -2.1337,
+                  "y": 0.7536999999999999,
+                  "smooth": true
+                },
+                {
+                  "id": "p23",
+                  "x": -2.27,
+                  "y": 0.42,
+                  "smooth": true
+                },
+                {
+                  "id": "p24",
+                  "x": -2.3,
+                  "y": 0.23
+                },
+                {
+                  "id": "p25",
+                  "x": -2.75,
+                  "y": 0.28
+                }
+              ],
+              "lines": [
+                {
+                  "id": "l1",
+                  "a": "p1",
+                  "b": "p2"
+                },
+                {
+                  "id": "l2",
+                  "a": "p2",
+                  "b": "p3"
+                },
+                {
+                  "id": "l3",
+                  "a": "p3",
+                  "b": "p4"
+                },
+                {
+                  "id": "l4",
+                  "a": "p4",
+                  "b": "p5"
+                },
+                {
+                  "id": "l5",
+                  "a": "p5",
+                  "b": "p6"
+                },
+                {
+                  "id": "l6",
+                  "a": "p6",
+                  "b": "p7"
+                },
+                {
+                  "id": "l7",
+                  "a": "p7",
+                  "b": "p8"
+                },
+                {
+                  "id": "l8",
+                  "a": "p8",
+                  "b": "p9"
+                },
+                {
+                  "id": "l9",
+                  "a": "p9",
+                  "b": "p10"
+                },
+                {
+                  "id": "l10",
+                  "a": "p10",
+                  "b": "p11"
+                },
+                {
+                  "id": "l11",
+                  "a": "p11",
+                  "b": "p12"
+                },
+                {
+                  "id": "l12",
+                  "a": "p12",
+                  "b": "p13"
+                },
+                {
+                  "id": "l13",
+                  "a": "p13",
+                  "b": "p14"
+                },
+                {
+                  "id": "l14",
+                  "a": "p14",
+                  "b": "p15"
+                },
+                {
+                  "id": "l15",
+                  "a": "p15",
+                  "b": "p16"
+                },
+                {
+                  "id": "l16",
+                  "a": "p16",
+                  "b": "p17"
+                },
+                {
+                  "id": "l17",
+                  "a": "p17",
+                  "b": "p18"
+                },
+                {
+                  "id": "l18",
+                  "a": "p18",
+                  "b": "p19"
+                },
+                {
+                  "id": "l19",
+                  "a": "p19",
+                  "b": "p20"
+                },
+                {
+                  "id": "l20",
+                  "a": "p20",
+                  "b": "p21"
+                },
+                {
+                  "id": "l21",
+                  "a": "p21",
+                  "b": "p22"
+                },
+                {
+                  "id": "l22",
+                  "a": "p22",
+                  "b": "p23"
+                },
+                {
+                  "id": "l23",
+                  "a": "p23",
+                  "b": "p24"
+                },
+                {
+                  "id": "l24",
+                  "a": "p24",
+                  "b": "p25"
+                },
+                {
+                  "id": "l25",
+                  "a": "p25",
+                  "b": "p1"
+                }
+              ]
+            },
+            "top": {
+              "points": [
+                {
+                  "id": "p1",
+                  "x": 0,
+                  "y": -2.88,
+                  "smooth": true
+                },
+                {
+                  "id": "p2",
+                  "x": 0.7,
+                  "y": -2.86,
+                  "smooth": true
+                },
+                {
+                  "id": "p3",
+                  "x": 0.95,
+                  "y": -2.7,
+                  "smooth": true
+                },
+                {
+                  "id": "p4",
+                  "x": 1,
+                  "y": -2.2,
+                  "smooth": true
+                },
+                {
+                  "id": "p5",
+                  "x": 1,
+                  "y": 2.3,
+                  "smooth": true
+                },
+                {
+                  "id": "p6",
+                  "x": 0.96,
+                  "y": 2.75,
+                  "smooth": true
+                },
+                {
+                  "id": "p7",
+                  "x": 0.7,
+                  "y": 2.86,
+                  "smooth": true
+                },
+                {
+                  "id": "p8",
+                  "x": 0,
+                  "y": 2.87,
+                  "smooth": true
+                }
+              ],
+              "lines": [
+                {
+                  "id": "l1",
+                  "a": "p1",
+                  "b": "p2"
+                },
+                {
+                  "id": "l2",
+                  "a": "p2",
+                  "b": "p3"
+                },
+                {
+                  "id": "l3",
+                  "a": "p3",
+                  "b": "p4"
+                },
+                {
+                  "id": "l4",
+                  "a": "p4",
+                  "b": "p5"
+                },
+                {
+                  "id": "l5",
+                  "a": "p5",
+                  "b": "p6"
+                },
+                {
+                  "id": "l6",
+                  "a": "p6",
+                  "b": "p7"
+                },
+                {
+                  "id": "l7",
+                  "a": "p7",
+                  "b": "p8"
+                }
+              ]
+            },
+            "front": {
+              "points": [
+                {
+                  "id": "p1",
+                  "x": 0,
+                  "y": 0
+                },
+                {
+                  "id": "p2",
+                  "x": 0.95,
+                  "y": 0
+                },
+                {
+                  "id": "p3",
+                  "x": 1,
+                  "y": 0.12,
+                  "smooth": true
+                },
+                {
+                  "id": "p4",
+                  "x": 1,
+                  "y": 0.8,
+                  "smooth": true
+                },
+                {
+                  "id": "p5",
+                  "x": 0.94,
+                  "y": 0.97,
+                  "smooth": true
+                },
+                {
+                  "id": "p6",
+                  "x": 0.6,
+                  "y": 1,
+                  "smooth": true
+                },
+                {
+                  "id": "p7",
+                  "x": 0,
+                  "y": 1,
+                  "smooth": true
+                }
+              ],
+              "lines": [
+                {
+                  "id": "l1",
+                  "a": "p1",
+                  "b": "p2"
+                },
+                {
+                  "id": "l2",
+                  "a": "p2",
+                  "b": "p3"
+                },
+                {
+                  "id": "l3",
+                  "a": "p3",
+                  "b": "p4"
+                },
+                {
+                  "id": "l4",
+                  "a": "p4",
+                  "b": "p5"
+                },
+                {
+                  "id": "l5",
+                  "a": "p5",
+                  "b": "p6"
+                },
+                {
+                  "id": "l6",
+                  "a": "p6",
+                  "b": "p7"
+                }
+              ]
+            }
+          },
+          "body": {
+            "stations": 80,
+            "sectionPoints": 48,
+            "roundness": 6,
+            "symmetric": true,
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_971a6450ba1acc27",
+        "name": "Cabin",
+        "kind": "mesh",
+        "parentId": "obj_23dcc474dc3b335f",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#121a24",
+          "smooth": true
+        },
+        "source": {
+          "type": "body",
+          "views": {
+            "side": {
+              "points": [
+                {
+                  "id": "p1",
+                  "x": -1.25,
+                  "y": 1.02
+                },
+                {
+                  "id": "p2",
+                  "x": -0.55,
+                  "y": 1.5,
+                  "smooth": true
+                },
+                {
+                  "id": "p3",
+                  "x": 0.3,
+                  "y": 1.56,
+                  "smooth": true
+                },
+                {
+                  "id": "p4",
+                  "x": 1.25,
+                  "y": 1.48,
+                  "smooth": true
+                },
+                {
+                  "id": "p5",
+                  "x": 1.85,
+                  "y": 1.1,
+                  "smooth": true
+                },
+                {
+                  "id": "p6",
+                  "x": 1.98,
+                  "y": 0.98
+                },
+                {
+                  "id": "p7",
+                  "x": -1.25,
+                  "y": 0.98
+                }
+              ],
+              "lines": [
+                {
+                  "id": "l1",
+                  "a": "p1",
+                  "b": "p2"
+                },
+                {
+                  "id": "l2",
+                  "a": "p2",
+                  "b": "p3"
+                },
+                {
+                  "id": "l3",
+                  "a": "p3",
+                  "b": "p4"
+                },
+                {
+                  "id": "l4",
+                  "a": "p4",
+                  "b": "p5"
+                },
+                {
+                  "id": "l5",
+                  "a": "p5",
+                  "b": "p6"
+                },
+                {
+                  "id": "l6",
+                  "a": "p6",
+                  "b": "p7"
+                },
+                {
+                  "id": "l7",
+                  "a": "p7",
+                  "b": "p1"
+                }
+              ]
+            },
+            "top": {
+              "points": [
+                {
+                  "id": "p1",
+                  "x": 0,
+                  "y": -1.3,
+                  "smooth": true
+                },
+                {
+                  "id": "p2",
+                  "x": 0.7,
+                  "y": -1.24,
+                  "smooth": true
+                },
+                {
+                  "id": "p3",
+                  "x": 0.86,
+                  "y": -0.7,
+                  "smooth": true
+                },
+                {
+                  "id": "p4",
+                  "x": 0.88,
+                  "y": 0.6,
+                  "smooth": true
+                },
+                {
+                  "id": "p5",
+                  "x": 0.84,
+                  "y": 1.6,
+                  "smooth": true
+                },
+                {
+                  "id": "p6",
+                  "x": 0.55,
+                  "y": 2,
+                  "smooth": true
+                },
+                {
+                  "id": "p7",
+                  "x": 0,
+                  "y": 2.02,
+                  "smooth": true
+                }
+              ],
+              "lines": [
+                {
+                  "id": "l1",
+                  "a": "p1",
+                  "b": "p2"
+                },
+                {
+                  "id": "l2",
+                  "a": "p2",
+                  "b": "p3"
+                },
+                {
+                  "id": "l3",
+                  "a": "p3",
+                  "b": "p4"
+                },
+                {
+                  "id": "l4",
+                  "a": "p4",
+                  "b": "p5"
+                },
+                {
+                  "id": "l5",
+                  "a": "p5",
+                  "b": "p6"
+                },
+                {
+                  "id": "l6",
+                  "a": "p6",
+                  "b": "p7"
+                }
+              ]
+            },
+            "front": {
+              "points": [
+                {
+                  "id": "p1",
+                  "x": 0,
+                  "y": 0
+                },
+                {
+                  "id": "p2",
+                  "x": 0.88,
+                  "y": 0
+                },
+                {
+                  "id": "p3",
+                  "x": 0.8,
+                  "y": 0.5,
+                  "smooth": true
+                },
+                {
+                  "id": "p4",
+                  "x": 0.62,
+                  "y": 0.95,
+                  "smooth": true
+                },
+                {
+                  "id": "p5",
+                  "x": 0,
+                  "y": 1,
+                  "smooth": true
+                }
+              ],
+              "lines": [
+                {
+                  "id": "l1",
+                  "a": "p1",
+                  "b": "p2"
+                },
+                {
+                  "id": "l2",
+                  "a": "p2",
+                  "b": "p3"
+                },
+                {
+                  "id": "l3",
+                  "a": "p3",
+                  "b": "p4"
+                },
+                {
+                  "id": "l4",
+                  "a": "p4",
+                  "b": "p5"
+                }
+              ]
+            }
+          },
+          "body": {
+            "stations": 44,
+            "sectionPoints": 36,
+            "roundness": 4,
+            "symmetric": true,
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_85b60369e53d4bc6",
+        "name": "Grille",
+        "kind": "mesh",
+        "parentId": "obj_23dcc474dc3b335f",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            2.885
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#cfd3d8",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": -0.36,
+              "y": 0.48
+            },
+            {
+              "id": "p2",
+              "x": 0.36,
+              "y": 0.48
+            },
+            {
+              "id": "p3",
+              "x": 0.36,
+              "y": 0.95
+            },
+            {
+              "id": "p4",
+              "x": 0.3,
+              "y": 1,
+              "smooth": true
+            },
+            {
+              "id": "p5",
+              "x": -0.3,
+              "y": 1,
+              "smooth": true
+            },
+            {
+              "id": "p6",
+              "x": -0.36,
+              "y": 0.95
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.04,
+            "segments": 32,
+            "mirror": false,
+            "axis": "vertical",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_a781baba2c3b4c54",
+        "name": "Headlights",
+        "kind": "mesh",
+        "parentId": "obj_23dcc474dc3b335f",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            2.885
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#f4f1e6",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": 0.55,
+              "y": 0.78
+            },
+            {
+              "id": "p2",
+              "x": 0.9,
+              "y": 0.78
+            },
+            {
+              "id": "p3",
+              "x": 0.9,
+              "y": 0.92,
+              "smooth": true
+            },
+            {
+              "id": "p4",
+              "x": 0.55,
+              "y": 0.92,
+              "smooth": true
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.02,
+            "segments": 32,
+            "mirror": true,
+            "axis": "vertical",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_8f079ddad3ebb6e2",
+        "name": "Taillights",
+        "kind": "mesh",
+        "parentId": "obj_23dcc474dc3b335f",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            -2.865
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#c42a2a",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": 0.68,
+              "y": 0.6
+            },
+            {
+              "id": "p2",
+              "x": 0.95,
+              "y": 0.6
+            },
+            {
+              "id": "p3",
+              "x": 0.95,
+              "y": 0.86,
+              "smooth": true
+            },
+            {
+              "id": "p4",
+              "x": 0.68,
+              "y": 0.86,
+              "smooth": true
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.02,
+            "segments": 32,
+            "mirror": true,
+            "axis": "vertical",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_5ec38eb48ece5f90",
+        "name": "Wheels",
+        "kind": "group",
+        "parentId": "obj_23dcc474dc3b335f",
+        "childIds": [
+          "obj_704e624c3491eaca",
+          "obj_5b8f28dca0d597f0",
+          "obj_e3167ce1beb46dd6",
+          "obj_41e5e8daf6135f19"
+        ],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "obj_704e624c3491eaca",
+        "name": "Wheel front left",
+        "kind": "group",
+        "parentId": "obj_5ec38eb48ece5f90",
+        "childIds": [
+          "obj_50faf016ebee1b19",
+          "obj_9eeed09a55174c9a",
+          "obj_b3ce33226b07746d",
+          "obj_4c47eeae32d3e48e"
+        ],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.86,
+            0.42,
+            1.8
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "obj_50faf016ebee1b19",
+        "name": "Tyre",
+        "kind": "mesh",
+        "parentId": "obj_704e624c3491eaca",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#1b1e22",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": -0.13,
+              "y": 0.2772
+            },
+            {
+              "id": "p2",
+              "x": -0.14,
+              "y": 0.31220000000000003,
+              "smooth": true
+            },
+            {
+              "id": "p3",
+              "x": -0.14,
+              "y": 0.39,
+              "smooth": true
+            },
+            {
+              "id": "p4",
+              "x": -0.11500000000000002,
+              "y": 0.42,
+              "smooth": true
+            },
+            {
+              "id": "p5",
+              "x": 0.11500000000000002,
+              "y": 0.42,
+              "smooth": true
+            },
+            {
+              "id": "p6",
+              "x": 0.14,
+              "y": 0.39,
+              "smooth": true
+            },
+            {
+              "id": "p7",
+              "x": 0.14,
+              "y": 0.31220000000000003,
+              "smooth": true
+            },
+            {
+              "id": "p8",
+              "x": 0.13,
+              "y": 0.2772
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "revolve",
+            "depth": 0.2,
+            "segments": 48,
+            "mirror": false,
+            "axis": "horizontal",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_9eeed09a55174c9a",
+        "name": "Rim",
+        "kind": "mesh",
+        "parentId": "obj_704e624c3491eaca",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#5d646d",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": -0.135,
+              "y": 0
+            },
+            {
+              "id": "p2",
+              "x": -0.135,
+              "y": 0.2722
+            },
+            {
+              "id": "p3",
+              "x": 0.11000000000000001,
+              "y": 0.2722
+            },
+            {
+              "id": "p4",
+              "x": 0.11000000000000001,
+              "y": 0
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            }
+          ],
+          "shape": {
+            "mode": "revolve",
+            "depth": 0.2,
+            "segments": 48,
+            "mirror": false,
+            "axis": "horizontal",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_b3ce33226b07746d",
+        "name": "Spokes",
+        "kind": "mesh",
+        "parentId": "obj_704e624c3491eaca",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.14500000000000002,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#e3e6ea",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "side",
+          "points": [
+            {
+              "id": "p1",
+              "x": 1.574895783703496e-17,
+              "y": 0.2572
+            },
+            {
+              "id": "p2",
+              "x": -0.04115199999999998,
+              "y": 0.07127735483307444
+            },
+            {
+              "id": "p3",
+              "x": -0.22274173385335758,
+              "y": 0.12860000000000008
+            },
+            {
+              "id": "p4",
+              "x": -0.082304,
+              "y": 1.0079333015702376e-17
+            },
+            {
+              "id": "p5",
+              "x": -0.22274173385335766,
+              "y": -0.1285999999999999
+            },
+            {
+              "id": "p6",
+              "x": -0.041151999999999966,
+              "y": -0.07127735483307446
+            },
+            {
+              "id": "p7",
+              "x": -4.724687351110488e-17,
+              "y": -0.2572
+            },
+            {
+              "id": "p8",
+              "x": 0.041151999999999946,
+              "y": -0.07127735483307447
+            },
+            {
+              "id": "p9",
+              "x": 0.22274173385335755,
+              "y": -0.1286000000000001
+            },
+            {
+              "id": "p10",
+              "x": 0.082304,
+              "y": -2.015866603140475e-17
+            },
+            {
+              "id": "p11",
+              "x": 0.2227417338533576,
+              "y": 0.1286
+            },
+            {
+              "id": "p12",
+              "x": 0.04115200000000005,
+              "y": 0.07127735483307442
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p9"
+            },
+            {
+              "id": "l9",
+              "a": "p9",
+              "b": "p10"
+            },
+            {
+              "id": "l10",
+              "a": "p10",
+              "b": "p11"
+            },
+            {
+              "id": "l11",
+              "a": "p11",
+              "b": "p12"
+            },
+            {
+              "id": "l12",
+              "a": "p12",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.03,
+            "segments": 32,
+            "mirror": false,
+            "axis": "vertical",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_4c47eeae32d3e48e",
+        "name": "Hub",
+        "kind": "mesh",
+        "parentId": "obj_704e624c3491eaca",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.15000000000000002,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#9aa1a9",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "side",
+          "points": [
+            {
+              "id": "p1",
+              "x": 3.0237999047107126e-18,
+              "y": 0.0493824
+            },
+            {
+              "id": "p2",
+              "x": -0.018897826330425808,
+              "y": 0.045623388626285365
+            },
+            {
+              "id": "p3",
+              "x": -0.03491862991126656,
+              "y": 0.03491862991126657
+            },
+            {
+              "id": "p4",
+              "x": -0.045623388626285365,
+              "y": 0.018897826330425815
+            },
+            {
+              "id": "p5",
+              "x": -0.0493824,
+              "y": 6.047599809421425e-18
+            },
+            {
+              "id": "p6",
+              "x": -0.04562338862628537,
+              "y": -0.018897826330425804
+            },
+            {
+              "id": "p7",
+              "x": -0.034918629911266576,
+              "y": -0.03491862991126656
+            },
+            {
+              "id": "p8",
+              "x": -0.018897826330425836,
+              "y": -0.04562338862628536
+            },
+            {
+              "id": "p9",
+              "x": -9.071399714132138e-18,
+              "y": -0.0493824
+            },
+            {
+              "id": "p10",
+              "x": 0.01889782633042582,
+              "y": -0.04562338862628536
+            },
+            {
+              "id": "p11",
+              "x": 0.034918629911266555,
+              "y": -0.034918629911266576
+            },
+            {
+              "id": "p12",
+              "x": 0.04562338862628536,
+              "y": -0.01889782633042584
+            },
+            {
+              "id": "p13",
+              "x": 0.0493824,
+              "y": -1.209519961884285e-17
+            },
+            {
+              "id": "p14",
+              "x": 0.045623388626285365,
+              "y": 0.018897826330425818
+            },
+            {
+              "id": "p15",
+              "x": 0.034918629911266576,
+              "y": 0.034918629911266555
+            },
+            {
+              "id": "p16",
+              "x": 0.018897826330425842,
+              "y": 0.04562338862628536
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p9"
+            },
+            {
+              "id": "l9",
+              "a": "p9",
+              "b": "p10"
+            },
+            {
+              "id": "l10",
+              "a": "p10",
+              "b": "p11"
+            },
+            {
+              "id": "l11",
+              "a": "p11",
+              "b": "p12"
+            },
+            {
+              "id": "l12",
+              "a": "p12",
+              "b": "p13"
+            },
+            {
+              "id": "l13",
+              "a": "p13",
+              "b": "p14"
+            },
+            {
+              "id": "l14",
+              "a": "p14",
+              "b": "p15"
+            },
+            {
+              "id": "l15",
+              "a": "p15",
+              "b": "p16"
+            },
+            {
+              "id": "l16",
+              "a": "p16",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.05,
+            "segments": 32,
+            "mirror": false,
+            "axis": "vertical",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_5b8f28dca0d597f0",
+        "name": "Wheel front right",
+        "kind": "group",
+        "parentId": "obj_5ec38eb48ece5f90",
+        "childIds": [
+          "obj_ae947a0c98e7c117",
+          "obj_7ecb91719d26f16b",
+          "obj_d1971aeae2f9bb5f",
+          "obj_1b1e7cbdbe31446e"
+        ],
+        "visible": true,
+        "transform": {
+          "position": [
+            0.86,
+            0.42,
+            1.8
+          ],
+          "rotation": [
+            0,
+            180,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "obj_ae947a0c98e7c117",
+        "name": "Tyre",
+        "kind": "mesh",
+        "parentId": "obj_5b8f28dca0d597f0",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#1b1e22",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": -0.13,
+              "y": 0.2772
+            },
+            {
+              "id": "p2",
+              "x": -0.14,
+              "y": 0.31220000000000003,
+              "smooth": true
+            },
+            {
+              "id": "p3",
+              "x": -0.14,
+              "y": 0.39,
+              "smooth": true
+            },
+            {
+              "id": "p4",
+              "x": -0.11500000000000002,
+              "y": 0.42,
+              "smooth": true
+            },
+            {
+              "id": "p5",
+              "x": 0.11500000000000002,
+              "y": 0.42,
+              "smooth": true
+            },
+            {
+              "id": "p6",
+              "x": 0.14,
+              "y": 0.39,
+              "smooth": true
+            },
+            {
+              "id": "p7",
+              "x": 0.14,
+              "y": 0.31220000000000003,
+              "smooth": true
+            },
+            {
+              "id": "p8",
+              "x": 0.13,
+              "y": 0.2772
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "revolve",
+            "depth": 0.2,
+            "segments": 48,
+            "mirror": false,
+            "axis": "horizontal",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_7ecb91719d26f16b",
+        "name": "Rim",
+        "kind": "mesh",
+        "parentId": "obj_5b8f28dca0d597f0",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#5d646d",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": -0.135,
+              "y": 0
+            },
+            {
+              "id": "p2",
+              "x": -0.135,
+              "y": 0.2722
+            },
+            {
+              "id": "p3",
+              "x": 0.11000000000000001,
+              "y": 0.2722
+            },
+            {
+              "id": "p4",
+              "x": 0.11000000000000001,
+              "y": 0
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            }
+          ],
+          "shape": {
+            "mode": "revolve",
+            "depth": 0.2,
+            "segments": 48,
+            "mirror": false,
+            "axis": "horizontal",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_d1971aeae2f9bb5f",
+        "name": "Spokes",
+        "kind": "mesh",
+        "parentId": "obj_5b8f28dca0d597f0",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.14500000000000002,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#e3e6ea",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "side",
+          "points": [
+            {
+              "id": "p1",
+              "x": 1.574895783703496e-17,
+              "y": 0.2572
+            },
+            {
+              "id": "p2",
+              "x": -0.04115199999999998,
+              "y": 0.07127735483307444
+            },
+            {
+              "id": "p3",
+              "x": -0.22274173385335758,
+              "y": 0.12860000000000008
+            },
+            {
+              "id": "p4",
+              "x": -0.082304,
+              "y": 1.0079333015702376e-17
+            },
+            {
+              "id": "p5",
+              "x": -0.22274173385335766,
+              "y": -0.1285999999999999
+            },
+            {
+              "id": "p6",
+              "x": -0.041151999999999966,
+              "y": -0.07127735483307446
+            },
+            {
+              "id": "p7",
+              "x": -4.724687351110488e-17,
+              "y": -0.2572
+            },
+            {
+              "id": "p8",
+              "x": 0.041151999999999946,
+              "y": -0.07127735483307447
+            },
+            {
+              "id": "p9",
+              "x": 0.22274173385335755,
+              "y": -0.1286000000000001
+            },
+            {
+              "id": "p10",
+              "x": 0.082304,
+              "y": -2.015866603140475e-17
+            },
+            {
+              "id": "p11",
+              "x": 0.2227417338533576,
+              "y": 0.1286
+            },
+            {
+              "id": "p12",
+              "x": 0.04115200000000005,
+              "y": 0.07127735483307442
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p9"
+            },
+            {
+              "id": "l9",
+              "a": "p9",
+              "b": "p10"
+            },
+            {
+              "id": "l10",
+              "a": "p10",
+              "b": "p11"
+            },
+            {
+              "id": "l11",
+              "a": "p11",
+              "b": "p12"
+            },
+            {
+              "id": "l12",
+              "a": "p12",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.03,
+            "segments": 32,
+            "mirror": false,
+            "axis": "vertical",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_1b1e7cbdbe31446e",
+        "name": "Hub",
+        "kind": "mesh",
+        "parentId": "obj_5b8f28dca0d597f0",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.15000000000000002,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#9aa1a9",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "side",
+          "points": [
+            {
+              "id": "p1",
+              "x": 3.0237999047107126e-18,
+              "y": 0.0493824
+            },
+            {
+              "id": "p2",
+              "x": -0.018897826330425808,
+              "y": 0.045623388626285365
+            },
+            {
+              "id": "p3",
+              "x": -0.03491862991126656,
+              "y": 0.03491862991126657
+            },
+            {
+              "id": "p4",
+              "x": -0.045623388626285365,
+              "y": 0.018897826330425815
+            },
+            {
+              "id": "p5",
+              "x": -0.0493824,
+              "y": 6.047599809421425e-18
+            },
+            {
+              "id": "p6",
+              "x": -0.04562338862628537,
+              "y": -0.018897826330425804
+            },
+            {
+              "id": "p7",
+              "x": -0.034918629911266576,
+              "y": -0.03491862991126656
+            },
+            {
+              "id": "p8",
+              "x": -0.018897826330425836,
+              "y": -0.04562338862628536
+            },
+            {
+              "id": "p9",
+              "x": -9.071399714132138e-18,
+              "y": -0.0493824
+            },
+            {
+              "id": "p10",
+              "x": 0.01889782633042582,
+              "y": -0.04562338862628536
+            },
+            {
+              "id": "p11",
+              "x": 0.034918629911266555,
+              "y": -0.034918629911266576
+            },
+            {
+              "id": "p12",
+              "x": 0.04562338862628536,
+              "y": -0.01889782633042584
+            },
+            {
+              "id": "p13",
+              "x": 0.0493824,
+              "y": -1.209519961884285e-17
+            },
+            {
+              "id": "p14",
+              "x": 0.045623388626285365,
+              "y": 0.018897826330425818
+            },
+            {
+              "id": "p15",
+              "x": 0.034918629911266576,
+              "y": 0.034918629911266555
+            },
+            {
+              "id": "p16",
+              "x": 0.018897826330425842,
+              "y": 0.04562338862628536
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p9"
+            },
+            {
+              "id": "l9",
+              "a": "p9",
+              "b": "p10"
+            },
+            {
+              "id": "l10",
+              "a": "p10",
+              "b": "p11"
+            },
+            {
+              "id": "l11",
+              "a": "p11",
+              "b": "p12"
+            },
+            {
+              "id": "l12",
+              "a": "p12",
+              "b": "p13"
+            },
+            {
+              "id": "l13",
+              "a": "p13",
+              "b": "p14"
+            },
+            {
+              "id": "l14",
+              "a": "p14",
+              "b": "p15"
+            },
+            {
+              "id": "l15",
+              "a": "p15",
+              "b": "p16"
+            },
+            {
+              "id": "l16",
+              "a": "p16",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.05,
+            "segments": 32,
+            "mirror": false,
+            "axis": "vertical",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_e3167ce1beb46dd6",
+        "name": "Wheel rear left",
+        "kind": "group",
+        "parentId": "obj_5ec38eb48ece5f90",
+        "childIds": [
+          "obj_3368484b726bc9ee",
+          "obj_48dbf5b709473274",
+          "obj_a112320c0802cd37",
+          "obj_45796d762cc0de29"
+        ],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.86,
+            0.42,
+            -1.65
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "obj_3368484b726bc9ee",
+        "name": "Tyre",
+        "kind": "mesh",
+        "parentId": "obj_e3167ce1beb46dd6",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#1b1e22",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": -0.13,
+              "y": 0.2772
+            },
+            {
+              "id": "p2",
+              "x": -0.14,
+              "y": 0.31220000000000003,
+              "smooth": true
+            },
+            {
+              "id": "p3",
+              "x": -0.14,
+              "y": 0.39,
+              "smooth": true
+            },
+            {
+              "id": "p4",
+              "x": -0.11500000000000002,
+              "y": 0.42,
+              "smooth": true
+            },
+            {
+              "id": "p5",
+              "x": 0.11500000000000002,
+              "y": 0.42,
+              "smooth": true
+            },
+            {
+              "id": "p6",
+              "x": 0.14,
+              "y": 0.39,
+              "smooth": true
+            },
+            {
+              "id": "p7",
+              "x": 0.14,
+              "y": 0.31220000000000003,
+              "smooth": true
+            },
+            {
+              "id": "p8",
+              "x": 0.13,
+              "y": 0.2772
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "revolve",
+            "depth": 0.2,
+            "segments": 48,
+            "mirror": false,
+            "axis": "horizontal",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_48dbf5b709473274",
+        "name": "Rim",
+        "kind": "mesh",
+        "parentId": "obj_e3167ce1beb46dd6",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#5d646d",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": -0.135,
+              "y": 0
+            },
+            {
+              "id": "p2",
+              "x": -0.135,
+              "y": 0.2722
+            },
+            {
+              "id": "p3",
+              "x": 0.11000000000000001,
+              "y": 0.2722
+            },
+            {
+              "id": "p4",
+              "x": 0.11000000000000001,
+              "y": 0
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            }
+          ],
+          "shape": {
+            "mode": "revolve",
+            "depth": 0.2,
+            "segments": 48,
+            "mirror": false,
+            "axis": "horizontal",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_a112320c0802cd37",
+        "name": "Spokes",
+        "kind": "mesh",
+        "parentId": "obj_e3167ce1beb46dd6",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.14500000000000002,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#e3e6ea",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "side",
+          "points": [
+            {
+              "id": "p1",
+              "x": 1.574895783703496e-17,
+              "y": 0.2572
+            },
+            {
+              "id": "p2",
+              "x": -0.04115199999999998,
+              "y": 0.07127735483307444
+            },
+            {
+              "id": "p3",
+              "x": -0.22274173385335758,
+              "y": 0.12860000000000008
+            },
+            {
+              "id": "p4",
+              "x": -0.082304,
+              "y": 1.0079333015702376e-17
+            },
+            {
+              "id": "p5",
+              "x": -0.22274173385335766,
+              "y": -0.1285999999999999
+            },
+            {
+              "id": "p6",
+              "x": -0.041151999999999966,
+              "y": -0.07127735483307446
+            },
+            {
+              "id": "p7",
+              "x": -4.724687351110488e-17,
+              "y": -0.2572
+            },
+            {
+              "id": "p8",
+              "x": 0.041151999999999946,
+              "y": -0.07127735483307447
+            },
+            {
+              "id": "p9",
+              "x": 0.22274173385335755,
+              "y": -0.1286000000000001
+            },
+            {
+              "id": "p10",
+              "x": 0.082304,
+              "y": -2.015866603140475e-17
+            },
+            {
+              "id": "p11",
+              "x": 0.2227417338533576,
+              "y": 0.1286
+            },
+            {
+              "id": "p12",
+              "x": 0.04115200000000005,
+              "y": 0.07127735483307442
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p9"
+            },
+            {
+              "id": "l9",
+              "a": "p9",
+              "b": "p10"
+            },
+            {
+              "id": "l10",
+              "a": "p10",
+              "b": "p11"
+            },
+            {
+              "id": "l11",
+              "a": "p11",
+              "b": "p12"
+            },
+            {
+              "id": "l12",
+              "a": "p12",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.03,
+            "segments": 32,
+            "mirror": false,
+            "axis": "vertical",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_45796d762cc0de29",
+        "name": "Hub",
+        "kind": "mesh",
+        "parentId": "obj_e3167ce1beb46dd6",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.15000000000000002,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#9aa1a9",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "side",
+          "points": [
+            {
+              "id": "p1",
+              "x": 3.0237999047107126e-18,
+              "y": 0.0493824
+            },
+            {
+              "id": "p2",
+              "x": -0.018897826330425808,
+              "y": 0.045623388626285365
+            },
+            {
+              "id": "p3",
+              "x": -0.03491862991126656,
+              "y": 0.03491862991126657
+            },
+            {
+              "id": "p4",
+              "x": -0.045623388626285365,
+              "y": 0.018897826330425815
+            },
+            {
+              "id": "p5",
+              "x": -0.0493824,
+              "y": 6.047599809421425e-18
+            },
+            {
+              "id": "p6",
+              "x": -0.04562338862628537,
+              "y": -0.018897826330425804
+            },
+            {
+              "id": "p7",
+              "x": -0.034918629911266576,
+              "y": -0.03491862991126656
+            },
+            {
+              "id": "p8",
+              "x": -0.018897826330425836,
+              "y": -0.04562338862628536
+            },
+            {
+              "id": "p9",
+              "x": -9.071399714132138e-18,
+              "y": -0.0493824
+            },
+            {
+              "id": "p10",
+              "x": 0.01889782633042582,
+              "y": -0.04562338862628536
+            },
+            {
+              "id": "p11",
+              "x": 0.034918629911266555,
+              "y": -0.034918629911266576
+            },
+            {
+              "id": "p12",
+              "x": 0.04562338862628536,
+              "y": -0.01889782633042584
+            },
+            {
+              "id": "p13",
+              "x": 0.0493824,
+              "y": -1.209519961884285e-17
+            },
+            {
+              "id": "p14",
+              "x": 0.045623388626285365,
+              "y": 0.018897826330425818
+            },
+            {
+              "id": "p15",
+              "x": 0.034918629911266576,
+              "y": 0.034918629911266555
+            },
+            {
+              "id": "p16",
+              "x": 0.018897826330425842,
+              "y": 0.04562338862628536
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p9"
+            },
+            {
+              "id": "l9",
+              "a": "p9",
+              "b": "p10"
+            },
+            {
+              "id": "l10",
+              "a": "p10",
+              "b": "p11"
+            },
+            {
+              "id": "l11",
+              "a": "p11",
+              "b": "p12"
+            },
+            {
+              "id": "l12",
+              "a": "p12",
+              "b": "p13"
+            },
+            {
+              "id": "l13",
+              "a": "p13",
+              "b": "p14"
+            },
+            {
+              "id": "l14",
+              "a": "p14",
+              "b": "p15"
+            },
+            {
+              "id": "l15",
+              "a": "p15",
+              "b": "p16"
+            },
+            {
+              "id": "l16",
+              "a": "p16",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.05,
+            "segments": 32,
+            "mirror": false,
+            "axis": "vertical",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_41e5e8daf6135f19",
+        "name": "Wheel rear right",
+        "kind": "group",
+        "parentId": "obj_5ec38eb48ece5f90",
+        "childIds": [
+          "obj_ba0429c296bf1373",
+          "obj_05c45007895d3bf0",
+          "obj_f8abe9139615c0b9",
+          "obj_3d226fb0acb870f2"
+        ],
+        "visible": true,
+        "transform": {
+          "position": [
+            0.86,
+            0.42,
+            -1.65
+          ],
+          "rotation": [
+            0,
+            180,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "obj_ba0429c296bf1373",
+        "name": "Tyre",
+        "kind": "mesh",
+        "parentId": "obj_41e5e8daf6135f19",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#1b1e22",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": -0.13,
+              "y": 0.2772
+            },
+            {
+              "id": "p2",
+              "x": -0.14,
+              "y": 0.31220000000000003,
+              "smooth": true
+            },
+            {
+              "id": "p3",
+              "x": -0.14,
+              "y": 0.39,
+              "smooth": true
+            },
+            {
+              "id": "p4",
+              "x": -0.11500000000000002,
+              "y": 0.42,
+              "smooth": true
+            },
+            {
+              "id": "p5",
+              "x": 0.11500000000000002,
+              "y": 0.42,
+              "smooth": true
+            },
+            {
+              "id": "p6",
+              "x": 0.14,
+              "y": 0.39,
+              "smooth": true
+            },
+            {
+              "id": "p7",
+              "x": 0.14,
+              "y": 0.31220000000000003,
+              "smooth": true
+            },
+            {
+              "id": "p8",
+              "x": 0.13,
+              "y": 0.2772
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "revolve",
+            "depth": 0.2,
+            "segments": 48,
+            "mirror": false,
+            "axis": "horizontal",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_05c45007895d3bf0",
+        "name": "Rim",
+        "kind": "mesh",
+        "parentId": "obj_41e5e8daf6135f19",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#5d646d",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": -0.135,
+              "y": 0
+            },
+            {
+              "id": "p2",
+              "x": -0.135,
+              "y": 0.2722
+            },
+            {
+              "id": "p3",
+              "x": 0.11000000000000001,
+              "y": 0.2722
+            },
+            {
+              "id": "p4",
+              "x": 0.11000000000000001,
+              "y": 0
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            }
+          ],
+          "shape": {
+            "mode": "revolve",
+            "depth": 0.2,
+            "segments": 48,
+            "mirror": false,
+            "axis": "horizontal",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_f8abe9139615c0b9",
+        "name": "Spokes",
+        "kind": "mesh",
+        "parentId": "obj_41e5e8daf6135f19",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.14500000000000002,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#e3e6ea",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "side",
+          "points": [
+            {
+              "id": "p1",
+              "x": 1.574895783703496e-17,
+              "y": 0.2572
+            },
+            {
+              "id": "p2",
+              "x": -0.04115199999999998,
+              "y": 0.07127735483307444
+            },
+            {
+              "id": "p3",
+              "x": -0.22274173385335758,
+              "y": 0.12860000000000008
+            },
+            {
+              "id": "p4",
+              "x": -0.082304,
+              "y": 1.0079333015702376e-17
+            },
+            {
+              "id": "p5",
+              "x": -0.22274173385335766,
+              "y": -0.1285999999999999
+            },
+            {
+              "id": "p6",
+              "x": -0.041151999999999966,
+              "y": -0.07127735483307446
+            },
+            {
+              "id": "p7",
+              "x": -4.724687351110488e-17,
+              "y": -0.2572
+            },
+            {
+              "id": "p8",
+              "x": 0.041151999999999946,
+              "y": -0.07127735483307447
+            },
+            {
+              "id": "p9",
+              "x": 0.22274173385335755,
+              "y": -0.1286000000000001
+            },
+            {
+              "id": "p10",
+              "x": 0.082304,
+              "y": -2.015866603140475e-17
+            },
+            {
+              "id": "p11",
+              "x": 0.2227417338533576,
+              "y": 0.1286
+            },
+            {
+              "id": "p12",
+              "x": 0.04115200000000005,
+              "y": 0.07127735483307442
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p9"
+            },
+            {
+              "id": "l9",
+              "a": "p9",
+              "b": "p10"
+            },
+            {
+              "id": "l10",
+              "a": "p10",
+              "b": "p11"
+            },
+            {
+              "id": "l11",
+              "a": "p11",
+              "b": "p12"
+            },
+            {
+              "id": "l12",
+              "a": "p12",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.03,
+            "segments": 32,
+            "mirror": false,
+            "axis": "vertical",
+            "curveSteps": 10
+          }
+        }
+      },
+      {
+        "id": "obj_3d226fb0acb870f2",
+        "name": "Hub",
+        "kind": "mesh",
+        "parentId": "obj_41e5e8daf6135f19",
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            -0.15000000000000002,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#9aa1a9",
+          "smooth": true
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "side",
+          "points": [
+            {
+              "id": "p1",
+              "x": 3.0237999047107126e-18,
+              "y": 0.0493824
+            },
+            {
+              "id": "p2",
+              "x": -0.018897826330425808,
+              "y": 0.045623388626285365
+            },
+            {
+              "id": "p3",
+              "x": -0.03491862991126656,
+              "y": 0.03491862991126657
+            },
+            {
+              "id": "p4",
+              "x": -0.045623388626285365,
+              "y": 0.018897826330425815
+            },
+            {
+              "id": "p5",
+              "x": -0.0493824,
+              "y": 6.047599809421425e-18
+            },
+            {
+              "id": "p6",
+              "x": -0.04562338862628537,
+              "y": -0.018897826330425804
+            },
+            {
+              "id": "p7",
+              "x": -0.034918629911266576,
+              "y": -0.03491862991126656
+            },
+            {
+              "id": "p8",
+              "x": -0.018897826330425836,
+              "y": -0.04562338862628536
+            },
+            {
+              "id": "p9",
+              "x": -9.071399714132138e-18,
+              "y": -0.0493824
+            },
+            {
+              "id": "p10",
+              "x": 0.01889782633042582,
+              "y": -0.04562338862628536
+            },
+            {
+              "id": "p11",
+              "x": 0.034918629911266555,
+              "y": -0.034918629911266576
+            },
+            {
+              "id": "p12",
+              "x": 0.04562338862628536,
+              "y": -0.01889782633042584
+            },
+            {
+              "id": "p13",
+              "x": 0.0493824,
+              "y": -1.209519961884285e-17
+            },
+            {
+              "id": "p14",
+              "x": 0.045623388626285365,
+              "y": 0.018897826330425818
+            },
+            {
+              "id": "p15",
+              "x": 0.034918629911266576,
+              "y": 0.034918629911266555
+            },
+            {
+              "id": "p16",
+              "x": 0.018897826330425842,
+              "y": 0.04562338862628536
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p9"
+            },
+            {
+              "id": "l9",
+              "a": "p9",
+              "b": "p10"
+            },
+            {
+              "id": "l10",
+              "a": "p10",
+              "b": "p11"
+            },
+            {
+              "id": "l11",
+              "a": "p11",
+              "b": "p12"
+            },
+            {
+              "id": "l12",
+              "a": "p12",
+              "b": "p13"
+            },
+            {
+              "id": "l13",
+              "a": "p13",
+              "b": "p14"
+            },
+            {
+              "id": "l14",
+              "a": "p14",
+              "b": "p15"
+            },
+            {
+              "id": "l15",
+              "a": "p15",
+              "b": "p16"
+            },
+            {
+              "id": "l16",
+              "a": "p16",
+              "b": "p1"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.05,
+            "segments": 32,
+            "mirror": false,
+            "axis": "vertical",
+            "curveSteps": 10
+          }
+        }
+      }
+    ]
+  },
+  "camera": {
+    "position": [
+      -6.2,
+      3.3,
+      8.4
+    ],
+    "target": [
+      0.7,
+      0.7,
+      0.6
+    ]
+  }
+}

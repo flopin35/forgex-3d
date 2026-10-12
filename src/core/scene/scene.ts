@@ -5,10 +5,11 @@ import {
   identityMatrix,
   invertAffine,
   multiplyMatrices,
+  transformPoint,
   type Mat4,
   type Transform,
 } from '../math/transform';
-import type { Scene, SceneObject } from './types';
+import { meshGraphOf, type Scene, type SceneObject } from './types';
 
 export class SceneError extends Error {
   constructor(message: string) {
@@ -219,4 +220,36 @@ export function cloneSubtree(scene: Scene, id: string, createId: () => string): 
     parentId: object.parentId !== null && idMap.has(object.parentId) ? idMap.get(object.parentId)! : object.parentId,
     childIds: object.childIds.map((child) => idMap.get(child)!),
   }));
+}
+
+/**
+ * World-space bounding box of everything visible: [min, max], or null for an empty scene.
+ * Parametric primitives count as their 1 m box.
+ */
+export function sceneBounds(scene: Scene): [[number, number, number], [number, number, number]] | null {
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  const add = (matrix: Mat4, p: [number, number, number]) => {
+    const w = transformPoint(matrix, p);
+    for (let i = 0; i < 3; i++) {
+      min[i] = Math.min(min[i], w[i]);
+      max[i] = Math.max(max[i], w[i]);
+    }
+  };
+  const visit = (id: string, parent: Mat4) => {
+    const object = scene.objects[id];
+    if (!object || !object.visible) return;
+    const matrix = multiplyMatrices(parent, localMatrix(object));
+    if (object.kind === 'mesh') {
+      if (object.source.type === 'primitive') {
+        for (const x of [-0.5, 0.5]) for (const y of [-0.5, 0.5]) for (const z of [-0.5, 0.5]) add(matrix, [x, y, z]);
+      } else {
+        const graph = meshGraphOf(object);
+        if (graph) for (const vertex of Object.values(graph.vertices)) add(matrix, [vertex.position[0], vertex.position[1], vertex.position[2]]);
+      }
+    }
+    object.childIds.forEach((child) => visit(child, matrix));
+  };
+  scene.rootIds.forEach((id) => visit(id, identityMatrix()));
+  return min[0] <= max[0] ? [min, max] : null;
 }

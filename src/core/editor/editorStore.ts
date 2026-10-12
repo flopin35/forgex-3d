@@ -4,6 +4,7 @@ import { CommandHistory, type HistoryEntry } from '../history/history';
 import type { Transform } from '../math/transform';
 import { createDefaultDocument } from '../project/defaultDocument';
 import type { CameraState, ProjectDocument, ProjectSettings } from '../project/projectFile';
+import type { ReferenceImage } from '../project/references';
 import { setObjectTransform, updateObject } from '../scene/scene';
 import { isConstructionMesh, type MeshSource, type Scene } from '../scene/types';
 
@@ -51,6 +52,8 @@ export interface EditorState {
   selectedVertexId: string | null;
   tool: ToolMode;
   settings: ProjectSettings;
+  /** Pictures to trace over on the board (saved in the project). */
+  references: readonly ReferenceImage[];
   project: ProjectInfo;
   history: HistorySummary;
   /** `revision` changes whenever a loaded project asks the viewport to apply a camera view. */
@@ -127,6 +130,7 @@ export class EditorStore {
       selectedVertexId: null,
       tool: this.state?.tool ?? 'select',
       settings: { ...document.settings },
+      references: document.references ?? [],
       project: { name, path, savedRevision: this.history.revision, settingsDirty: false },
       history: this.summarizeHistory(),
       camera: { view: document.camera, revision: cameraRevision + 1 },
@@ -263,6 +267,12 @@ export class EditorStore {
     this.commit({ settings, project: { ...this.state.project, settingsDirty: true } });
   }
 
+  /** Replaces the reference pictures. They are saved with the project but are not part of undo. */
+  setReferences(references: readonly ReferenceImage[]): void {
+    if (references === this.state.references) return;
+    this.commit({ references, project: { ...this.state.project, settingsDirty: true } });
+  }
+
   setCameraView(view: CameraState): void {
     this.state = { ...this.state, camera: { ...this.state.camera, view } };
   }
@@ -277,14 +287,22 @@ export class EditorStore {
   }
 
   /** Records a successful save. Edits made while the save was running stay unsaved. */
-  markSaved(name: string, path: string | null, savedRevision: number, savedSettings: ProjectSettings): void {
+  markSaved(
+    name: string,
+    path: string | null,
+    savedRevision: number,
+    savedSettings: ProjectSettings,
+    savedReferences: readonly ReferenceImage[] = this.state.references,
+  ): void {
     this.commit({
-      project: { name, path, savedRevision, settingsDirty: this.state.settings !== savedSettings },
+      project: { name, path, savedRevision, settingsDirty: this.state.settings !== savedSettings || this.state.references !== savedReferences },
     });
   }
 
   toDocument(): ProjectDocument {
-    return { scene: this.state.scene, settings: this.state.settings, camera: this.state.camera.view };
+    const document: ProjectDocument = { scene: this.state.scene, settings: this.state.settings, camera: this.state.camera.view };
+    if (this.state.references.length) document.references = this.state.references;
+    return document;
   }
 
   // -- Diagnostics ------------------------------------------------------------

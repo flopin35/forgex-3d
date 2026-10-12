@@ -22,6 +22,7 @@ import {
   pointDegree,
   removeItems,
   removePoint,
+  setPointsSmooth,
   splitLine,
   translatePoints,
   type ShapeSettings,
@@ -95,6 +96,51 @@ describe('board editing helpers', () => {
     expect(findRegions(resolveSketch(merged, false))).toHaveLength(1);
     // Joining two ends of the same line removes the line instead of making a zero-length one.
     expect(Object.keys(mergePoints(open, ids[1], ids[0]).lines)).toHaveLength(3);
+  });
+});
+
+describe('smooth dots and curves', () => {
+  it('bends the lines at smooth dots into curves that pass through every dot', () => {
+    const sharp = shape(square);
+    const round = setPointsSmooth(sharp, Object.keys(sharp.points), true);
+    const resolved = resolveSketch(round, false, 8);
+    expect(resolved.points.size).toBe(4 + 4 * 7);
+    expect(resolved.paths).toHaveLength(4);
+    for (const path of resolved.paths) {
+      expect(path.points).toHaveLength(9);
+      expect(path.points[0]).toEqual(resolved.points.get(path.a));
+      expect(path.points[8]).toEqual(resolved.points.get(path.b));
+    }
+    const regions = findRegions(resolved);
+    expect(regions).toHaveLength(1);
+    // The curves bulge out between the dots: more area than the square.
+    expect(regions[0].area).toBeGreaterThan(4.2);
+    // One smooth dot only rounds the lines next to it.
+    const one = setPointsSmooth(sharp, [Object.keys(sharp.points)[0]], true);
+    expect(resolveSketch(one, false, 8).points.size).toBe(4 + 2 * 7);
+    expect(setPointsSmooth(round, Object.keys(round.points), false)).toEqual(sharp);
+  });
+
+  it('extrudes a curved, mirrored outline into one clean solid', () => {
+    const half = shape([[0, 2], [0.5, 1.5], [0.6, 0.4], [0, 0]], false, createSketch(), );
+    const curved = setPointsSmooth(half, Object.keys(half.points), true);
+    const { graph, regions } = generateShape(curved, extrude(0.1, true));
+    expect(regions).toBe(1);
+    const report = analyzeGraph(graph);
+    expect(report.closed).toBe(true);
+    expect(report.issues.filter((issue) => issue.severity !== 'info')).toEqual([]);
+  });
+
+  it('revolves around the horizontal axis for wheels', () => {
+    const tyre = shape([[-0.1, 0.25], [0.1, 0.25], [0.1, 0.35], [-0.1, 0.35]], true);
+    const { graph } = generateShape(tyre, { ...revolve(24), axis: 'horizontal' });
+    const report = analyzeGraph(graph);
+    expect(report.closed).toBe(true);
+    const radii = Object.values(graph.vertices).map((v) => Math.hypot(v.position[1], v.position[2]));
+    expect(Math.min(...radii)).toBeCloseTo(0.25, 6);
+    expect(Math.max(...radii)).toBeCloseTo(0.35, 6);
+    const xs = Object.values(graph.vertices).map((v) => v.position[0]);
+    expect(Math.min(...xs)).toBeCloseTo(-0.1, 6);
   });
 });
 

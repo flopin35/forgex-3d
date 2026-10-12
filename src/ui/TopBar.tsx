@@ -1,7 +1,9 @@
 import { useSyncExternalStore } from 'react';
 import { boardStore } from '../app/boardState';
+import { isDrawn } from '../app/drawing';
 import { useActions, useEditor } from '../app/EditorContext';
-import { isConstructionMesh, isSketchMesh } from '../core/scene/types';
+import { isConstructionMesh } from '../core/scene/types';
+import { TEMPLATES } from '../core/scene/templates';
 import { GRID_PRESETS } from '../core/units';
 import { BrandMark, Icon } from './icons';
 import { Menu, type MenuEntry } from './Menu';
@@ -15,7 +17,7 @@ export function TopBar() {
   const dirty = useEditor((s) => s.dirty);
   const hasSelection = useEditor((s) => s.selectedId !== null);
   const canEditPoints = useEditor((s) => isConstructionMesh(s.selectedId ? s.scene.objects[s.selectedId] : null));
-  const isBlueprint = useEditor((s) => isSketchMesh(s.selectedId ? s.scene.objects[s.selectedId] : null));
+  const isBlueprint = useEditor((s) => isDrawn(s.selectedId ? s.scene.objects[s.selectedId] : null));
   const board = useSyncExternalStore(boardStore.subscribe, boardStore.getState);
   const pointsMode = editMode === 'points';
 
@@ -36,8 +38,9 @@ export function TopBar() {
     { label: 'Group', shortcut: 'Ctrl+G', onSelect: actions.groupSelection, disabled: !hasSelection },
     { label: 'Delete object', onSelect: actions.deleteSelection, disabled: !hasSelection },
     { separator: true },
-    { label: 'Mirror drawing', shortcut: 'M', onSelect: actions.toggleMirror, disabled: !isBlueprint },
-    { label: 'Convert blueprint to points', onSelect: () => actions.convertToPoints(), disabled: !isBlueprint },
+    { label: 'Mirror drawing / symmetric body', shortcut: 'M', onSelect: actions.toggleMirror, disabled: !isBlueprint },
+    { label: 'Smooth or sharpen picked dots', shortcut: 'S', onSelect: () => void actions.toggleSmoothPicked(), disabled: !isBlueprint },
+    { label: 'Convert drawing to points', onSelect: () => actions.convertToPoints(), disabled: !isBlueprint },
     { separator: true },
     { label: pointsMode ? 'Leave points mode' : 'Edit points', shortcut: 'Tab', onSelect: actions.togglePointsMode, disabled: !canEditPoints },
     { label: 'Fill closed loops', onSelect: actions.fillLoops, disabled: !canEditPoints },
@@ -48,6 +51,9 @@ export function TopBar() {
     { label: 'Blueprint seen from the front', onSelect: () => actions.startNewBlueprint('front') },
     { label: 'Blueprint seen from the side', onSelect: () => actions.startNewBlueprint('side') },
     { label: 'Blueprint seen from the top', onSelect: () => actions.startNewBlueprint('top') },
+    { label: 'Body from side, top and front views', onSelect: actions.createBody },
+    { separator: true },
+    ...TEMPLATES.map((template) => ({ label: `${template.name} (ready-made)`, onSelect: () => actions.addTemplate(template.id) })),
     { separator: true },
     { label: 'Cube', onSelect: () => actions.addPart('cube') },
     { label: 'Plane', onSelect: () => actions.addPart('plane') },

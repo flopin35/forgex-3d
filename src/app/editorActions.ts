@@ -6,6 +6,7 @@ import {
   RenameObjectCommand,
   SetColorCommand,
   SetGraphCommand,
+  SetMeshLookCommand,
   SetSourceCommand,
   SetTransformCommand,
   SetVisibilityCommand,
@@ -22,12 +23,17 @@ import { cleanVec3, equals, snapScalar, type Vec3 } from '../core/math/vec3';
 import { createDefaultDocument, createEmptyDocument } from '../core/project/defaultDocument';
 import { ensureProjectExtension, fileNameFromPath, projectNameFromPath } from '../core/project/paths';
 import { parseProject, serializeProject } from '../core/project/projectFile';
-import { BLUEPRINT_COLORS, createBlueprintObject, createPartObject, getPart, type PartId } from '../core/scene/parts';
-import { cloneSubtree, indexInParent, planDrop, uniqueName, type DropPosition } from '../core/scene/scene';
-import { isConstructionMesh, isSketchMesh, meshGraphOf, type MeshObject, type MeshSource } from '../core/scene/types';
-import { clampShape, removeItems, setPlane, type ShapeSettings, type Sketch, type SketchPlane } from '../core/sketch/sketch';
+import { cleanModifiers, hasModifiers, NO_MODIFIERS, type MeshModifiers } from '../core/geometry/modifiers';
+import { createReference, MAX_REFERENCE_CHARS, type ReferenceImage } from '../core/project/references';
+import { BLUEPRINT_COLORS, createBlueprintObject, createBodyObject, createPartObject, getPart, type PartId } from '../core/scene/parts';
+import { cloneSubtree, indexInParent, planDrop, sceneBounds, uniqueName, type DropPosition } from '../core/scene/scene';
+import { createTemplate, type TemplateId } from '../core/scene/templates';
+import { isBodyMesh, isConstructionMesh, isSketchMesh, sourceGraphOf, type MeshObject, type MeshSource } from '../core/scene/types';
+import { clampBody, type BodySettings, type BodyView } from '../core/sketch/body';
+import { clampShape, removeItems, setPlane, setPointsSmooth, type ShapeSettings, type Sketch, type SketchPlane } from '../core/sketch/sketch';
 import type { PlatformFiles } from '../platform/files';
-import { boardStore } from './boardState';
+import { boardStore, isPenTool } from './boardState';
+import { drawingIn, drawingOf, isDrawn, withDrawing, type ActiveDrawing } from './drawing';
 
 /** A selected blueprint: a mesh whose shape comes from a drawing on the board. */
 export type BlueprintObject = MeshObject & { source: { type: 'sketch'; sketch: Sketch; shape: ShapeSettings } };
@@ -176,7 +182,7 @@ export class EditorActions {
       return false;
     }
     const savedPath = this.files.kind === 'desktop' ? path : null;
-    this.store.markSaved(projectNameFromPath(path), savedPath, revision, state.settings);
+    this.store.markSaved(projectNameFromPath(path), savedPath, revision, state.settings, state.references);
     const where = this.files.kind === 'desktop' ? path : `${fileNameFromPath(path)} (downloaded)`;
     this.store.log('success', `Saved ${where}.`);
     return true;
@@ -269,7 +275,7 @@ export class EditorActions {
     else this.store.previewTransform(id, before);
   };
 
-  // -- Blueprints (the drawing board) ----------------------------------------------
+  // -- Drawings on the board (blueprints and bodies) --------------------------------
 
   /** The selected object when it is a blueprint, else null. */
   activeBlueprint = (): BlueprintObject | null => {
@@ -278,40 +284,81 @@ export class EditorActions {
     return isSketchMesh(object) ? object : null;
   };
 
+  /** The drawing the board edits: the selected blueprint, or the current view of the selected body. */
+  activeDrawing = (): ActiveDrawing | null => {
+    const { selectedId, scene } = this.store.getState();
+    return drawingOf(selectedId ? scene.objects[selectedId] : null, boardStore.getState().bodyView);
+  };
+
+  private nextColor(): string {
+    const count = Object.values(this.store.getState().scene.objects).filter((object) => isDrawn(object)).length;
+    return BLUEPRINT_COLORS[count % BLUEPRINT_COLORS.length];
+  }
+
   /** Adds a blueprint holding `sketch` (drawn on its plane) and selects it. Returns its id. */
   createBlueprint = (sketch: Sketch, label = 'Start a blueprint', shape?: Partial<ShapeSettings>): string | null => {
     const { scene } = this.store.getState();
-    const count = Object.values(scene.objects).filter((object) => isSketchMesh(object)).length;
-    const object = createBlueprintObject({
-      name: uniqueName(scene, 'Blueprint'),
-      sketch,
-      shape,
-      color: BLUEPRINT_COLORS[count % BLUEPRINT_COLORS.length],
-    });
+    const object = createBlueprintObject({ name: uniqueName(scene, 'Blueprint'), sketch, shape, color: this.nextColor() });
     return this.run(new AddObjectsCommand([object], null, undefined, label)) ? object.id : null;
+  };
+
+  /** Adds an empty body and opens its side view, ready to draw the outline with curves. */
+  createBody = (): void => {
+    const { scene } = this.store.getState();
+    const object = createBodyObject({ name: uniqueName(scene, 'Body'), color: this.nextColor() });
+    if (!this.run(new AddObjectsCommand([object], null, undefined, 'New body'))) return;
+    boardStore.set({ bodyView: 'side', tool: 'curve', chainFrom: null, selectedPoints: [], selectedLines: [] });
+    this.store.log(
+      'info',
+      'New body: draw its side view (the front of the object on the left), then its top view and, if you like, its front view. Each view is an outline; it lofts into one smooth solid.',
+    );
+  };
+
+  /** Adds a ready-made car built from bodies and blueprints, all editable. */
+  addTemplate = (id: TemplateId): void => {
+    const { scene } = this.store.getState();
+    // Park the new model beside whatever is already there, so models never overlap.
+    const bounds = sceneBounds(scene);
+    const probe = createTemplate(id);
+    const probeBounds = sceneBounds({ objects: Object.fromEntries(probe.map((o) => [o.id, o])), rootIds: [probe[0].id] });
+    const halfWidth = probeBounds ? (probeBounds[1][0] - probeBounds[0][0]) / 2 : 1;
+    const x = bounds ? Math.ceil(bounds[1][0] + 1 + halfWidth) : 0;
+    const objects = createTemplate(id, { groundPosition: [x, 0] });
+    objects[0] = { ...objects[0], name: uniqueName(scene, objects[0].name) };
+    if (this.run(new AddObjectsCommand(objects, null, undefined, `Add ${objects[0].name}`))) {
+      this.viewport?.frameSelection();
+      this.store.log('success', `Added ${objects[0].name} with ${objects.length - 1} parts. Pick its Body or Cabin and use the Side, Top and Front tabs to reshape it.`);
+    }
   };
 
   /** Deselects so the next click on the board starts a new blueprint on `plane`. */
   startNewBlueprint = (plane?: SketchPlane): void => {
     this.store.select(null);
     boardStore.clearSelection();
-    boardStore.set({ tool: 'draw', ...(plane ? { newPlane: plane } : {}) });
+    boardStore.set({ tool: isPenTool(boardStore.getState().tool) ? boardStore.getState().tool : 'draw', ...(plane ? { newPlane: plane } : {}) });
   };
 
   /**
-   * Commits a new drawing for a blueprint. Pass `before` when the drawing was previewed
-   * live (dragging dots), so undo returns to where the drag started.
+   * Commits a new version of one drawing (a blueprint, or one view of a body). Pass
+   * `before` when the drawing was previewed live (dragging dots), so undo returns to
+   * where the drag started.
    */
-  editBlueprint = (id: string, sketch: Sketch, label: string, before?: MeshSource): boolean => {
+  editDrawing = (id: string, view: BodyView | null, sketch: Sketch, label: string, before?: MeshSource): boolean => {
     const object = this.store.getState().scene.objects[id];
-    if (!isSketchMesh(object)) return false;
+    if (!isDrawn(object)) return false;
     const from = before ?? object.source;
-    if (from.type !== 'sketch') return false;
-    if (from.sketch === sketch) {
+    if (from.type !== 'sketch' && from.type !== 'body') return false;
+    if (drawingIn(from, view) === sketch) {
       if (before) this.store.previewSource(id, before);
       return false;
     }
-    return this.run(new SetSourceCommand(id, from, { type: 'sketch', sketch, shape: from.shape }, label));
+    return this.run(new SetSourceCommand(id, from, withDrawing(from, view, sketch), label));
+  };
+
+  /** Shows a drawing change live without recording it (dragging dots). */
+  previewDrawing = (id: string, view: BodyView | null, sketch: Sketch, base: MeshSource): void => {
+    if (base.type !== 'sketch' && base.type !== 'body') return;
+    this.store.previewSource(id, withDrawing(base, view, sketch));
   };
 
   /** Changes how a drawing becomes 3D (flat, extrude, revolve, depth, segments, mirror). */
@@ -335,47 +382,106 @@ export class EditorActions {
     this.store.previewSource(id, { ...base, shape: clampShape({ ...base.shape, ...patch }) });
   };
 
+  /** Changes how a body is lofted (slices, points per slice, roundness, symmetry). */
+  setBodySettings = (id: string, patch: Partial<BodySettings>, before?: MeshSource, label?: string): boolean => {
+    const object = this.store.getState().scene.objects[id];
+    if (!isBodyMesh(object)) return false;
+    const from = before ?? object.source;
+    if (from.type !== 'body') return false;
+    const body = clampBody({ ...from.body, ...patch });
+    const same = (Object.keys(body) as (keyof BodySettings)[]).every((key) => body[key] === from.body[key]);
+    if (same) {
+      if (before) this.store.previewSource(id, before);
+      return false;
+    }
+    return this.run(new SetSourceCommand(id, from, { ...from, body }, label ?? `Loft ${object.name}`));
+  };
+
+  previewBodySettings = (id: string, patch: Partial<BodySettings>, base: MeshSource): void => {
+    if (base.type !== 'body') return;
+    this.store.previewSource(id, { ...base, body: clampBody({ ...base.body, ...patch }) });
+  };
+
+  /** Smooth shading and modifiers (mirror, subdivision) for any mesh. */
+  setMeshLook = (id: string, patch: { smooth?: boolean; modifiers?: Partial<MeshModifiers> }): void => {
+    const object = this.store.getState().scene.objects[id];
+    if (object?.kind !== 'mesh') return;
+    const modifiers = cleanModifiers({ ...(object.modifiers ?? NO_MODIFIERS), ...patch.modifiers });
+    // Turning subdivision on almost always wants a smooth look too.
+    const startsSubdividing = patch.smooth === undefined && modifiers.subdivide > 0 && !(object.modifiers?.subdivide);
+    const smooth = patch.smooth ?? (startsSubdividing ? true : !!object.material.smooth);
+    const before = { modifiers: object.modifiers, smooth: !!object.material.smooth };
+    const after = { modifiers: hasModifiers(modifiers) ? modifiers : undefined, smooth };
+    if (before.smooth === after.smooth && JSON.stringify(before.modifiers ?? null) === JSON.stringify(after.modifiers ?? null)) return;
+    const what = patch.smooth !== undefined ? (smooth ? 'Smooth shading' : 'Flat shading') : patch.modifiers?.subdivide !== undefined ? `Subdivide ${modifiers.subdivide}` : `Mirror ${modifiers.mirror}`;
+    this.run(new SetMeshLookCommand(id, before, after, `${what} on ${object.name}`));
+  };
+
   setBlueprintPlane = (id: string, plane: SketchPlane): void => {
     const object = this.store.getState().scene.objects[id];
     if (!isSketchMesh(object) || object.source.sketch.plane === plane) return;
-    this.editBlueprint(id, setPlane(object.source.sketch, plane), `Draw ${object.name} on the ${plane} plane`);
+    this.editDrawing(id, null, setPlane(object.source.sketch, plane), `Draw ${object.name} on the ${plane} plane`);
   };
 
+  /** M: mirror a blueprint's drawing, or make a body symmetric (or not). */
   toggleMirror = (): void => {
-    const blueprint = this.activeBlueprint();
-    if (!blueprint) {
-      this.store.log('info', 'Select a blueprint to mirror its drawing.');
+    const drawing = this.activeDrawing();
+    if (!drawing) {
+      this.store.log('info', 'Select a blueprint or body to mirror its drawing.');
       return;
     }
-    const mirror = !blueprint.source.shape.mirror;
-    this.setBlueprintShape(blueprint.id, { mirror }, undefined, `${mirror ? 'Mirror' : 'Unmirror'} ${blueprint.name}`);
+    const { object } = drawing;
+    if (object.source.type === 'body') {
+      const symmetric = !object.source.body.symmetric;
+      this.setBodySettings(object.id, { symmetric }, undefined, `${symmetric ? 'Symmetric' : 'Free'} ${object.name}`);
+      return;
+    }
+    const mirror = !object.source.shape.mirror;
+    this.setBlueprintShape(object.id, { mirror }, undefined, `${mirror ? 'Mirror' : 'Unmirror'} ${object.name}`);
+  };
+
+  /** S: makes the picked dots smooth (curves), or sharp again when they all are smooth. */
+  toggleSmoothPicked = (): boolean => {
+    const drawing = this.activeDrawing();
+    const { selectedPoints, selectedLines } = boardStore.getState();
+    if (!drawing) return false;
+    const ids = new Set(selectedPoints);
+    for (const id of selectedLines) {
+      const line = drawing.sketch.lines[id];
+      if (line) ids.add(line.a).add(line.b);
+    }
+    const picked = [...ids].filter((id) => drawing.sketch.points[id]);
+    if (picked.length === 0) return false;
+    const smooth = !picked.every((id) => drawing.sketch.points[id].smooth);
+    this.editDrawing(drawing.object.id, drawing.view, setPointsSmooth(drawing.sketch, picked, smooth), `${smooth ? 'Smooth' : 'Sharpen'} ${plural(picked.length, 'dot')}`);
+    return true;
   };
 
   /** Deletes the dots and lines picked on the board. Returns false when nothing was picked. */
   deleteBoardSelection = (): boolean => {
-    const blueprint = this.activeBlueprint();
+    const drawing = this.activeDrawing();
     const { selectedPoints, selectedLines } = boardStore.getState();
-    if (!blueprint || (selectedPoints.length === 0 && selectedLines.length === 0)) return false;
-    const sketch = removeItems(blueprint.source.sketch, selectedPoints, selectedLines);
+    if (!drawing || (selectedPoints.length === 0 && selectedLines.length === 0)) return false;
+    const sketch = removeItems(drawing.sketch, selectedPoints, selectedLines);
     boardStore.clearSelection();
     const parts = [
       selectedPoints.length ? plural(selectedPoints.length, 'dot') : '',
       selectedLines.length ? plural(selectedLines.length, 'line') : '',
     ].filter(Boolean);
-    this.editBlueprint(blueprint.id, sketch, `Delete ${parts.join(' and ')}`);
+    this.editDrawing(drawing.object.id, drawing.view, sketch, `Delete ${parts.join(' and ')}`);
     return true;
   };
 
   /** Backspace while drawing: removes the dot just placed and continues from the one before it. */
   stepBackChain = (): boolean => {
-    const blueprint = this.activeBlueprint();
+    const drawing = this.activeDrawing();
     const { chainFrom, tool } = boardStore.getState();
-    if (!blueprint || tool !== 'draw' || !chainFrom || !blueprint.source.sketch.points[chainFrom]) return false;
-    const sketch = blueprint.source.sketch;
+    if (!drawing || !isPenTool(tool) || !chainFrom || !drawing.sketch.points[chainFrom]) return false;
+    const sketch = drawing.sketch;
     const neighbours = Object.values(sketch.lines)
       .filter((line) => line.a === chainFrom || line.b === chainFrom)
       .map((line) => (line.a === chainFrom ? line.b : line.a));
-    this.editBlueprint(blueprint.id, removeItems(sketch, [chainFrom], []), `Remove dot ${chainFrom}`);
+    this.editDrawing(drawing.object.id, drawing.view, removeItems(sketch, [chainFrom], []), `Remove dot ${chainFrom}`);
     boardStore.set({ chainFrom: neighbours.length === 1 ? neighbours[0] : null });
     return true;
   };
@@ -385,16 +491,69 @@ export class EditorActions {
     if (!this.deleteBoardSelection()) this.deleteSelection();
   };
 
-  /** Turns a blueprint into a point-built mesh so its vertices can be edited one by one. */
+  /** Turns a blueprint or body into a point-built mesh so its vertices can be edited one by one. */
   convertToPoints = (id?: string): void => {
-    const object = id ? this.store.getState().scene.objects[id] : this.activeBlueprint();
-    if (!isSketchMesh(object)) return;
-    const graph = meshGraphOf(object);
+    const object = id ? this.store.getState().scene.objects[id] : this.activeDrawing()?.object;
+    if (!isDrawn(object)) return;
+    const graph = sourceGraphOf(object);
     if (!graph) return;
     if (this.run(new SetSourceCommand(object.id, object.source, { type: 'construction', graph }, `Convert ${object.name} to points`))) {
       boardStore.clearSelection();
-      this.store.log('info', `${object.name} is now point-built: press Tab to edit its vertices. Undo turns it back into a blueprint.`);
+      this.store.log('info', `${object.name} is now point-built: press Tab to edit its vertices. Undo turns it back into a drawing.`);
     }
+  };
+
+  // -- Reference pictures -------------------------------------------------------------
+
+  /** Loads a picture to trace over on the given plane, sized to a typical car length. */
+  addReference = async (file: File, plane: SketchPlane): Promise<void> => {
+    if (!file.type.startsWith('image/')) {
+      this.store.log('warning', `${file.name} is not a picture. Use a PNG, JPEG or WebP image.`);
+      return;
+    }
+    if (file.size > (MAX_REFERENCE_CHARS * 3) / 4) {
+      this.store.log('warning', `${file.name} is too large for a reference picture (limit about 18 MB).`);
+      return;
+    }
+    try {
+      const src = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error ?? new Error('The picture could not be read.'));
+        reader.readAsDataURL(file);
+      });
+      const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+        image.onerror = () => reject(new Error('The picture could not be decoded.'));
+        image.src = src;
+      });
+      const reference = createReference({
+        id: `ref_${createObjectId().slice(4)}`,
+        plane,
+        name: file.name.replace(/\.[^.]+$/, ''),
+        src,
+        aspect: size.height / size.width,
+        width: plane === 'front' ? 2.2 : 4.6,
+      });
+      this.store.setReferences([...this.store.getState().references, reference]);
+      boardStore.set({ adjustingReference: reference.id, referencesOpen: true });
+      this.store.log('info', `Added ${reference.name} behind the ${plane} view. Drag it on the board to line it up, and set its width to the real length.`);
+    } catch (error) {
+      this.store.log('error', `${file.name} could not be loaded.`, error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  updateReference = (id: string, patch: Partial<Omit<ReferenceImage, 'id' | 'src'>>): void => {
+    const references = this.store.getState().references;
+    if (!references.some((r) => r.id === id)) return;
+    this.store.setReferences(references.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  };
+
+  removeReference = (id: string): void => {
+    const references = this.store.getState().references;
+    this.store.setReferences(references.filter((r) => r.id !== id));
+    if (boardStore.getState().adjustingReference === id) boardStore.set({ adjustingReference: null });
   };
 
   toggleTurntable = (): void => {

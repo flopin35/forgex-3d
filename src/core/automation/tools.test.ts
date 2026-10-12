@@ -202,3 +202,76 @@ describe('blueprint tools', () => {
     if (old.ok) expect(old.migratedFrom).toBe(1);
   });
 });
+
+describe('car modelling tools', () => {
+  it('lofts a car body from side, top and front outlines and edits one view', async () => {
+    const ctx = context();
+    const out = await runTool(
+      'create_body',
+      {
+        name: 'Coupe',
+        side: [[-2.2, 0.3], [-2.1, 0.6], [-0.6, 0.85], [0.4, 1.25], [1.6, 1.0], [2.2, 0.8], [2.2, 0.3]],
+        top: [[0, -2.2], [0.8, -2.0], [0.95, 0], [0.85, 2.0], [0, 2.2]],
+        front: [[0, 0], [0.95, 0], [1, 0.4], [0.6, 1], [0, 1]],
+        body: { stations: 32, section_points: 24 },
+      },
+      ctx,
+    );
+    const info = details(out.text);
+    expect(info.closedViews).toEqual({ side: true, top: true, front: true });
+    expect(info.geometry.closed).toBe(true);
+    expect(info.geometry.faces).toBe(31 * 24 + 2);
+    const listed = details((await runTool('list_objects', {}, ctx)).text);
+    expect(listed[0].type).toBe('body');
+    await expectToolError(runTool('edit_blueprint', { object: 'Coupe', add_points: [[0, 0]] }, ctx), 'view');
+    const edited = details((await runTool('edit_blueprint', { object: 'Coupe', view: 'side', move_points: [{ point: 'p4', offset: [0, 0.1] }], sharp_points: ['p1'] }, ctx)).text);
+    expect(edited.geometry.closed).toBe(true);
+    const body = details((await runTool('get_object', { object: 'Coupe' }, ctx)).text);
+    expect(body.views.side.points[3].y).toBeCloseTo(1.35);
+    expect(body.views.side.points[0].smooth).toBeUndefined();
+    expect(body.views.side.points[1].smooth).toBe(true);
+  });
+
+  it('adds a complete supercar and repaints its body', async () => {
+    const ctx = context();
+    const out = await runTool('add_template', { template: 'supercar', color: '#c0392b', position: [3, 0, 0] }, ctx);
+    const tree = details(out.text);
+    expect(tree[0].name).toBe('Supercar');
+    expect(tree[0].position).toEqual([3, 0, 0]);
+    const body = tree[0].children.find((c: { name: string }) => c.name === 'Body');
+    expect(body.color).toBe('#c0392b');
+    expect(tree[0].children.find((c: { name: string }) => c.name === 'Wheels').children).toHaveLength(4);
+    await runTool('undo', {}, ctx);
+    expect(ctx.store.getState().scene.rootIds).toHaveLength(0);
+  });
+
+  it('smooths a cube with subdivision and mirrors it, as one undo step', async () => {
+    const ctx = context();
+    await runTool('add_part', { part: 'cube', name: 'Block' }, ctx);
+    const out = details((await runTool('set_modifiers', { object: 'Block', subdivide: 2, smooth_shading: true }, ctx)).text);
+    expect(out.modifiers).toEqual({ mirror: 'none', subdivide: 2 });
+    expect(out.smoothShading).toBe(true);
+    expect(out.geometry.faces).toBe(96);
+    expect(out.geometry.closed).toBe(true);
+    await runTool('undo', {}, ctx);
+    const block = details((await runTool('get_object', { object: 'Block', include_geometry: false }, ctx)).text);
+    expect(block.modifiers).toBeUndefined();
+    expect(block.smoothShading).toBeUndefined();
+  });
+
+  it('draws curved blueprints and wheels revolved around the horizontal axis', async () => {
+    const ctx = context();
+    const out = details(
+      (await runTool('create_blueprint', {
+        name: 'Tyre',
+        points: [[-0.1, 0.25], [0.1, 0.25], [0.1, 0.35], [-0.1, 0.35]],
+        smooth: [2, 3],
+        shape: { mode: 'revolve', axis: 'horizontal', segments: 24, curve_steps: 4 },
+      }, ctx)).text,
+    );
+    expect(out.shape.axis).toBe('horizontal');
+    expect(out.geometry.closed).toBe(true);
+    const tyre = details((await runTool('get_object', { object: 'Tyre' }, ctx)).text);
+    expect(tyre.points.filter((p: { smooth?: boolean }) => p.smooth)).toHaveLength(2);
+  });
+});

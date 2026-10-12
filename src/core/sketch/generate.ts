@@ -3,7 +3,7 @@ import { GraphBuilder } from '../geometry/graphBuilder';
 import { orientFaces } from '../geometry/orientation';
 import { add, scale, type Vec3 } from '../math/vec3';
 import { findRegions, resolveSketch, triangulateRegion, type Region } from './regions';
-import { AXIS_EPSILON, type ShapeSettings, type Sketch, type SketchPlane } from './sketch';
+import { AXIS_EPSILON, type RevolveAxis, type ShapeSettings, type Sketch, type SketchPlane } from './sketch';
 
 /**
  * Axes of each drawing plane in the object's local space (+Y up, front faces +Z).
@@ -32,7 +32,7 @@ const cache = new WeakMap<Sketch, Map<string, GeneratedShape>>();
 
 /** Builds the 3D construction graph for a drawing. Results are cached per drawing and settings. */
 export function generateShape(sketch: Sketch, shape: ShapeSettings): GeneratedShape {
-  const key = `${shape.mode}|${shape.depth}|${shape.segments}|${shape.mirror}`;
+  const key = `${shape.mode}|${shape.depth}|${shape.segments}|${shape.mirror}|${shape.axis}|${shape.curveSteps}`;
   let byShape = cache.get(sketch);
   if (!byShape) {
     byShape = new Map();
@@ -42,10 +42,10 @@ export function generateShape(sketch: Sketch, shape: ShapeSettings): GeneratedSh
   if (cached) return cached;
   const result =
     shape.mode === 'revolve'
-      ? revolve(sketch, shape.segments)
+      ? revolve(sketch, shape.segments, shape.axis, shape.curveSteps)
       : shape.mode === 'extrude' && shape.depth > 1e-4
-        ? extrude(sketch, shape.depth, shape.mirror)
-        : flat(sketch, shape.mirror);
+        ? extrude(sketch, shape.depth, shape.mirror, shape.curveSteps)
+        : flat(sketch, shape.mirror, shape.curveSteps);
   byShape.set(key, result);
   return result;
 }
@@ -59,8 +59,8 @@ function capFaces(builder: GraphBuilder, region: Region, ids: Map<string, string
   }
 }
 
-function flat(sketch: Sketch, mirror: boolean): GeneratedShape {
-  const resolved = resolveSketch(sketch, mirror);
+function flat(sketch: Sketch, mirror: boolean, curveSteps: number): GeneratedShape {
+  const resolved = resolveSketch(sketch, mirror, curveSteps);
   const builder = new GraphBuilder();
   const ids = new Map<string, string>();
   for (const [id, [x, y]] of resolved.points) ids.set(id, builder.vertex(planeTo3d(sketch.plane, x, y)));
@@ -70,8 +70,8 @@ function flat(sketch: Sketch, mirror: boolean): GeneratedShape {
   return { graph: builder.build(), regions: regions.length, skippedFaces: builder.skippedFaces };
 }
 
-function extrude(sketch: Sketch, depth: number, mirror: boolean): GeneratedShape {
-  const resolved = resolveSketch(sketch, mirror);
+function extrude(sketch: Sketch, depth: number, mirror: boolean, curveSteps: number): GeneratedShape {
+  const resolved = resolveSketch(sketch, mirror, curveSteps);
   const builder = new GraphBuilder();
   const used = new Set(resolved.segments.flat());
   const front = new Map<string, string>();
@@ -109,25 +109,30 @@ function extrude(sketch: Sketch, depth: number, mirror: boolean): GeneratedShape
   return { graph, regions: regions.length, skippedFaces: builder.skippedFaces };
 }
 
-/** Spins the drawing's lines around its vertical axis (x = 0), like a lathe. */
-function revolve(sketch: Sketch, segments: number): GeneratedShape {
-  const resolved = resolveSketch(sketch, false);
+/**
+ * Spins the drawing's lines around an axis, like a lathe: the board's vertical line
+ * (x = 0) for vases and bottles, or its horizontal line (y = 0) for wheels and barrels.
+ */
+function revolve(sketch: Sketch, segments: number, axis: RevolveAxis, curveSteps: number): GeneratedShape {
+  const resolved = resolveSketch(sketch, false, curveSteps);
   const builder = new GraphBuilder();
   const { u, v, n } = PLANE_AXES[sketch.plane];
+  // Along: the axis direction; across: the board direction that sweeps around it.
+  const [along, across] = axis === 'vertical' ? [v, u] : [u, v];
   const used = new Set(resolved.segments.flat());
   const rings = new Map<string, string[]>();
   for (const [id, [x, y]] of resolved.points) {
     if (!used.has(id)) continue;
-    const radius = Math.abs(x);
+    const [position, radius] = axis === 'vertical' ? [y, Math.abs(x)] : [x, Math.abs(y)];
     if (radius <= AXIS_EPSILON) {
-      const single = builder.vertex(scale(v, y));
+      const single = builder.vertex(scale(along, position));
       rings.set(id, Array.from({ length: segments }, () => single));
       continue;
     }
     const ring: string[] = [];
     for (let k = 0; k < segments; k++) {
       const angle = (2 * Math.PI * k) / segments;
-      ring.push(builder.vertex(add(scale(v, y), add(scale(u, radius * Math.cos(angle)), scale(n, radius * Math.sin(angle))))));
+      ring.push(builder.vertex(add(scale(along, position), add(scale(across, radius * Math.cos(angle)), scale(n, radius * Math.sin(angle))))));
     }
     rings.set(id, ring);
   }

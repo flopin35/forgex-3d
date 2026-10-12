@@ -18,6 +18,8 @@ export interface SketchPoint {
   readonly x: number;
   /** Vertical position on the drawing plane, in metres. */
   readonly y: number;
+  /** A smooth dot: the lines through it bend into a curve instead of meeting at a corner. */
+  readonly smooth?: boolean;
 }
 
 export interface SketchLine {
@@ -33,6 +35,10 @@ export interface Sketch {
   readonly counters: { readonly point: number; readonly line: number };
 }
 
+/** The axis a revolve spins around: the board's vertical line (x = 0) or its horizontal line (y = 0). */
+export type RevolveAxis = 'vertical' | 'horizontal';
+export const REVOLVE_AXES: readonly RevolveAxis[] = ['vertical', 'horizontal'];
+
 export interface ShapeSettings {
   readonly mode: ShapeMode;
   /** Extrusion thickness in metres. */
@@ -41,9 +47,16 @@ export interface ShapeSettings {
   readonly segments: number;
   /** Mirror the drawing across the vertical axis (x = 0). */
   readonly mirror: boolean;
+  /** Revolve around the vertical axis (vases, bottles) or the horizontal one (wheels, barrels). */
+  readonly axis: RevolveAxis;
+  /** Straight pieces used for each curved line (smooth dots). */
+  readonly curveSteps: number;
 }
 
-export const DEFAULT_SHAPE: ShapeSettings = { mode: 'extrude', depth: 0.2, segments: 32, mirror: false };
+export const DEFAULT_CURVE_STEPS = 10;
+export const MIN_CURVE_STEPS = 2;
+export const MAX_CURVE_STEPS = 48;
+export const DEFAULT_SHAPE: ShapeSettings = { mode: 'extrude', depth: 0.2, segments: 32, mirror: false, axis: 'vertical', curveSteps: DEFAULT_CURVE_STEPS };
 export const MIN_SEGMENTS = 3;
 export const MAX_SEGMENTS = 256;
 export const MAX_DEPTH = 1000;
@@ -71,14 +84,14 @@ export function findLine(sketch: Sketch, a: string, b: string): SketchLine | und
   return Object.values(sketch.lines).find((line) => linePairKey(line.a, line.b) === key);
 }
 
-export function addPoint(sketch: Sketch, x: number, y: number): { sketch: Sketch; pointId: string } {
+export function addPoint(sketch: Sketch, x: number, y: number, smooth = false): { sketch: Sketch; pointId: string } {
   if (!isFiniteNumber(x) || !isFiniteNumber(y)) throw new SketchError('A dot needs finite x and y positions.');
   const id = `p${sketch.counters.point}`;
   return {
     pointId: id,
     sketch: {
       ...sketch,
-      points: { ...sketch.points, [id]: { id, x, y } },
+      points: { ...sketch.points, [id]: smooth ? { id, x, y, smooth: true } : { id, x, y } },
       counters: { ...sketch.counters, point: sketch.counters.point + 1 },
     },
   };
@@ -103,9 +116,23 @@ export function addLine(sketch: Sketch, a: string, b: string): { sketch: Sketch;
 }
 
 export function movePoint(sketch: Sketch, id: string, x: number, y: number): Sketch {
-  if (!sketch.points[id]) throw new SketchError(`Dot ${id} does not exist.`);
+  const p = sketch.points[id];
+  if (!p) throw new SketchError(`Dot ${id} does not exist.`);
   if (!isFiniteNumber(x) || !isFiniteNumber(y)) throw new SketchError('A dot needs finite x and y positions.');
-  return { ...sketch, points: { ...sketch.points, [id]: { id, x, y } } };
+  return { ...sketch, points: { ...sketch.points, [id]: { ...p, x, y } } };
+}
+
+/** Makes dots smooth (curved) or sharp (corners). Unknown ids are ignored. */
+export function setPointsSmooth(sketch: Sketch, ids: readonly string[], smooth: boolean): Sketch {
+  const points = { ...sketch.points };
+  let changed = false;
+  for (const id of ids) {
+    const p = sketch.points[id];
+    if (!p || !!p.smooth === smooth) continue;
+    points[id] = smooth ? { ...p, smooth: true } : { id: p.id, x: p.x, y: p.y };
+    changed = true;
+  }
+  return changed ? { ...sketch, points } : sketch;
 }
 
 /** Removes a dot and every line attached to it. */
@@ -134,11 +161,12 @@ export function addPolyline(
   sketch: Sketch,
   points: readonly (readonly [number, number])[],
   closed: boolean,
+  smooth: boolean | ((index: number) => boolean) = false,
 ): { sketch: Sketch; pointIds: string[] } {
   let next = sketch;
   const ids: string[] = [];
-  for (const [x, y] of points) {
-    const added = addPoint(next, x, y);
+  for (const [i, [x, y]] of points.entries()) {
+    const added = addPoint(next, x, y, typeof smooth === 'function' ? smooth(i) : smooth);
     next = added.sketch;
     ids.push(added.pointId);
   }
@@ -169,7 +197,9 @@ export function polygonPoints(cx: number, cy: number, radius: number, sides: num
 export function splitLine(sketch: Sketch, lineId: string, x: number, y: number): { sketch: Sketch; pointId: string } {
   const line = sketch.lines[lineId];
   if (!line) throw new SketchError(`Line ${lineId} does not exist.`);
-  const added = addPoint(removeLine(sketch, lineId), x, y);
+  // A dot added on a curve stays on the curve.
+  const smooth = !!(sketch.points[line.a]?.smooth || sketch.points[line.b]?.smooth);
+  const added = addPoint(removeLine(sketch, lineId), x, y, smooth);
   let next = addLine(added.sketch, line.a, added.pointId).sketch;
   next = addLine(next, added.pointId, line.b).sketch;
   return { sketch: next, pointId: added.pointId };
@@ -210,7 +240,7 @@ export function translatePoints(sketch: Sketch, ids: readonly string[], dx: numb
   for (const id of ids) {
     const p = sketch.points[id];
     if (!p) continue;
-    points[id] = { id, x: p.x + dx, y: p.y + dy };
+    points[id] = { ...p, x: p.x + dx, y: p.y + dy };
     moved = true;
   }
   return moved ? { ...sketch, points } : sketch;
@@ -254,11 +284,18 @@ export function sketchCounts(sketch: Sketch): { points: number; lines: number } 
   return { points: Object.keys(sketch.points).length, lines: Object.keys(sketch.lines).length };
 }
 
-export function clampShape(shape: ShapeSettings): ShapeSettings {
+function clampInt(value: unknown, min: number, max: number, fallback: number): number {
+  return Math.min(max, Math.max(min, Math.round(isFiniteNumber(value) ? value : fallback)));
+}
+
+/** Fills in missing settings (older files) and keeps every value in range. */
+export function clampShape(shape: Partial<ShapeSettings>): ShapeSettings {
   return {
-    mode: SHAPE_MODES.includes(shape.mode) ? shape.mode : DEFAULT_SHAPE.mode,
+    mode: SHAPE_MODES.includes(shape.mode as ShapeMode) ? (shape.mode as ShapeMode) : DEFAULT_SHAPE.mode,
     depth: Math.min(MAX_DEPTH, Math.max(0, isFiniteNumber(shape.depth) ? shape.depth : DEFAULT_SHAPE.depth)),
-    segments: Math.min(MAX_SEGMENTS, Math.max(MIN_SEGMENTS, Math.round(isFiniteNumber(shape.segments) ? shape.segments : DEFAULT_SHAPE.segments))),
+    segments: clampInt(shape.segments, MIN_SEGMENTS, MAX_SEGMENTS, DEFAULT_SHAPE.segments),
     mirror: shape.mirror === true,
+    axis: REVOLVE_AXES.includes(shape.axis as RevolveAxis) ? (shape.axis as RevolveAxis) : 'vertical',
+    curveSteps: clampInt(shape.curveSteps, MIN_CURVE_STEPS, MAX_CURVE_STEPS, DEFAULT_CURVE_STEPS),
   };
 }

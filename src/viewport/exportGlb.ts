@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { analyzeGraph } from '../core/geometry/analysis';
 import { DEG_TO_RAD } from '../core/math/transform';
-import { meshGraphOf, type Scene, type SceneObject } from '../core/scene/types';
+import { meshGraphOf, SMOOTH_SHADING_ANGLE, type Scene, type SceneObject } from '../core/scene/types';
 import { buildConstructionBuffers, PrimitiveGeometryCache } from './geometryFactory';
 
 export interface GlbExport {
@@ -37,7 +37,7 @@ export async function exportSceneToGlb(scene: Scene, name: string): Promise<GlbE
       } else {
         const graph = meshGraphOf(object);
         if (graph) {
-          const buffers = buildConstructionBuffers(graph);
+          const buffers = buildConstructionBuffers(graph, { smoothAngle: object.material.smooth ? SMOOTH_SHADING_ANGLE : 0 });
           buffers.edges.dispose();
           buffers.points.dispose();
           owned.push(buffers.faces);

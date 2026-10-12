@@ -1,7 +1,12 @@
+import type { BodyView } from '../core/sketch/body';
 import type { SketchPlane } from '../core/sketch/sketch';
 
-/** Board tools. */
-export type BoardTool = 'draw' | 'select' | 'rectangle' | 'circle';
+/** Board tools. "curve" draws like "draw" but its dots are smooth. */
+export type BoardTool = 'draw' | 'curve' | 'select' | 'rectangle' | 'circle';
+
+export function isPenTool(tool: BoardTool): boolean {
+  return tool === 'draw' || tool === 'curve';
+}
 
 export interface BoardState {
   tool: BoardTool;
@@ -24,6 +29,12 @@ export interface BoardState {
   snap: boolean;
   /** Board grid spacing in metres (separate from the 3D grid, drawings need finer steps). */
   snapSize: number;
+  /** Which drawing of a body the board shows. */
+  bodyView: BodyView;
+  /** The reference picture being moved on the board, or null. */
+  adjustingReference: string | null;
+  /** Show the reference pictures panel. */
+  referencesOpen: boolean;
 }
 
 /** Board snap steps; 0.28 m is one Roblox stud. */
@@ -76,6 +87,9 @@ class BoardStore {
     split: 0.5,
     snap: true,
     snapSize: 0.05,
+    bodyView: 'side',
+    adjustingReference: null,
+    referencesOpen: false,
     ...(typeof window === 'undefined' ? {} : loadPrefs()),
   };
   private listeners = new Set<() => void>();
@@ -98,7 +112,15 @@ class BoardStore {
   }
 
   setTool(tool: BoardTool): void {
-    this.set({ tool, chainFrom: null, selectedPoints: tool === 'select' ? this.state.selectedPoints : [], selectedLines: tool === 'select' ? this.state.selectedLines : [] });
+    // Switching between the two pens keeps the line going.
+    const keepChain = isPenTool(tool) && isPenTool(this.state.tool);
+    this.set({
+      tool,
+      chainFrom: keepChain ? this.state.chainFrom : null,
+      selectedPoints: tool === 'select' ? this.state.selectedPoints : [],
+      selectedLines: tool === 'select' ? this.state.selectedLines : [],
+      adjustingReference: null,
+    });
   }
 
   clearSelection(): void {

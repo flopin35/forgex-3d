@@ -104,7 +104,7 @@ export function Viewport() {
         <div className="viewport-empty">
           <Icon name="shapeExtrude" size={34} />
           <p className="viewport-empty-title">Your 3D object appears here</p>
-          <p>Draw on the board, or add a part from the Create menu.</p>
+          <p>Draw on the board, or add a part or a ready-made car from the Create menu.</p>
         </div>
       )}
       <div className="viewport-help">
