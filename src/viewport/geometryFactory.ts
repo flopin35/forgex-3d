@@ -82,10 +82,11 @@ export function buildGrid(cell: number, cellsPerSide = 40): THREE.Group {
     const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
     return new THREE.LineSegments(geometry, material);
   };
-  group.add(lines(minor, 0x1f2b3a, 0.7));
-  group.add(lines(major, 0x2b3c51, 0.95));
-  group.add(lines([-half, 0, 0, half, 0, 0], 0xd9505f, 0.9));
-  group.add(lines([0, 0, -half, 0, 0, half], 0x3f86e0, 0.9));
+  // A cyan-tinted floor grid to match the light table; X red, Z blue as in Blender.
+  group.add(lines(minor, 0x0f2c42, 0.75));
+  group.add(lines(major, 0x17506d, 0.9));
+  group.add(lines([-half, 0, 0, half, 0, 0], 0xff5470, 0.9));
+  group.add(lines([0, 0, -half, 0, 0, half], 0x2f9bff, 0.9));
   group.position.y = -0.0005;
   group.renderOrder = -1;
   return group;

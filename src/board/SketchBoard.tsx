@@ -80,10 +80,10 @@ const TOOLS: { tool: BoardTool; label: string; key: string; icon: IconName }[] =
   { tool: 'circle', label: 'Circle', key: 'O', icon: 'circle' },
 ];
 
-const PLANE_INFO: Record<SketchPlane, { label: string; caption: string; title: string }> = {
-  front: { label: 'Front', caption: 'Front view · X right · Y up', title: 'Draw what you see from the front. Thickness goes front to back.' },
-  side: { label: 'Side', caption: 'Side view · front of the object on the left · Y up', title: 'Draw what you see from the right side. Thickness goes left to right.' },
-  top: { label: 'Top', caption: 'Top view · X right · front of the object at the bottom', title: 'Draw a plan seen from above. Thickness grows upwards from the ground.' },
+const PLANE_INFO: Record<SketchPlane, { label: string; caption: string; axes: readonly string[]; title: string }> = {
+  front: { label: 'Front', caption: 'Front view', axes: ['X →', 'Y ↑'], title: 'Draw what you see from the front. Thickness goes front to back.' },
+  side: { label: 'Side', caption: 'Side view', axes: ['Front ←', 'Y ↑'], title: 'Draw what you see from the right side. Thickness goes left to right.' },
+  top: { label: 'Top', caption: 'Top view', axes: ['X →', 'Front ↓'], title: 'Draw a plan seen from above. Thickness grows upwards from the ground.' },
 };
 
 const VIEW_HELP: Record<BodyView, string> = {
@@ -798,7 +798,7 @@ export function SketchBoard() {
           title="Pictures to trace over, such as car blueprints"
         >
           <Icon name="image" size={14} />
-          Pictures
+          <span className="button-label">Pictures</span>
           {references.filter((r) => r.plane === plane).length > 0 && <span className="badge">{references.filter((r) => r.plane === plane).length}</span>}
         </button>
         <div className="snap-control" title="Snap dots to the board grid">
@@ -896,6 +896,19 @@ export function SketchBoard() {
             onContextMenu={(event) => event.preventDefault()}
             onDoubleClick={() => boardStore.set({ chainFrom: null })}
           >
+            <defs>
+              {/* The light-table glow around the ink: a soft halo under the crisp line. */}
+              <filter id="board-glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="2.4" result="blur" />
+                <feComponentTransfer in="blur" result="halo">
+                  <feFuncA type="linear" slope="0.95" />
+                </feComponentTransfer>
+                <feMerge>
+                  <feMergeNode in="halo" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
             {planeReferences.map((reference) => {
               const h = reference.width * reference.aspect;
               const [left, top] = s(reference.x - reference.width / 2, reference.y + h / 2);
@@ -985,13 +998,15 @@ export function SketchBoard() {
               <path key={i} className="board-ghost" d={pathOf(points.map(([x, y]) => s(x, y)), false)} />
             ))}
 
-            {sketch &&
-              Object.values(sketch.lines).map((line) => {
-                const points = linePaths.get(line.id);
-                if (!points) return null;
-                const classes = ['board-line', selectedLines.has(line.id) ? 'is-selected' : '', hover?.line === line.id ? 'is-hover' : ''];
-                return <path key={line.id} className={classes.join(' ')} d={pathOf(points.map(([x, y]) => s(x, y)), false)} />;
-              })}
+            <g className="board-ink" filter="url(#board-glow)">
+              {sketch &&
+                Object.values(sketch.lines).map((line) => {
+                  const points = linePaths.get(line.id);
+                  if (!points) return null;
+                  const classes = ['board-line', selectedLines.has(line.id) ? 'is-selected' : '', hover?.line === line.id ? 'is-hover' : ''];
+                  return <path key={line.id} className={classes.join(' ')} d={pathOf(points.map(([x, y]) => s(x, y)), false)} />;
+                })}
+            </g>
 
             {preview?.kind === 'shape' && <path className="board-preview" d={pathOf(preview.points.map(([x, y]) => s(x, y)), true)} />}
 
@@ -1051,8 +1066,15 @@ export function SketchBoard() {
           </svg>
 
           <div className="board-caption">
-            {isBody && drawing?.view ? `${object?.name} · ` : ''}
-            {PLANE_INFO[plane].caption}
+            <span>
+              {isBody && drawing?.view ? `${object?.name}, ` : ''}
+              {isBody && drawing?.view ? PLANE_INFO[plane].caption.toLowerCase() : PLANE_INFO[plane].caption}
+            </span>
+            <span className="caption-axes" aria-hidden="true">
+              {PLANE_INFO[plane].axes.map((axis) => (
+                <span key={axis}>{axis}</span>
+              ))}
+            </span>
           </div>
 
           {board.tool === 'circle' && (

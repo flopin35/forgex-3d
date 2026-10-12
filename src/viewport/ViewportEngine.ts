@@ -23,8 +23,8 @@ import type { CameraState, ProjectSettings } from '../core/project/projectFile';
 import { meshGraphOf, SMOOTH_SHADING_ANGLE, sourceGraphOf, type Scene, type SceneObject } from '../core/scene/types';
 import { buildConstructionBuffers, buildGrid, buildPointBuffers, disposeObjectTree, PrimitiveGeometryCache } from './geometryFactory';
 
-const ACCENT = 0x38b2ff;
-const EDGE_COLOR = 0x08111d;
+const ACCENT = 0x2fe3ff;
+const EDGE_COLOR = 0x04101f;
 const VERTEX_COLOR = new THREE.Color(0xdfe8f3);
 const CAGE_COLOR = 0xffb02e;
 const VERTEX_SELECTED_COLOR = new THREE.Color(0xffb02e);
@@ -56,21 +56,21 @@ interface ObjectNode {
 }
 
 type DragState =
-  | { kind: 'object'; id: string; before: Transform; label: string }
+  | {
+      kind: 'object';
+      id: string;
+      before: Transform;
+      label: string;
+      /** The gizmo handle's world matrix when the drag began (inverted). */
+      handleStartInverse: THREE.Matrix4;
+      objectStartWorld: THREE.Matrix4;
+      parentInverse: THREE.Matrix4;
+    }
   | { kind: 'vertex'; id: string; vertexId: string; graphBefore: ConstructionGraph; inverseWorld: THREE.Matrix4 };
 
 function sourceKeyOf(object: SceneObject): string {
   if (object.kind === 'group') return 'group';
   return object.source.type === 'primitive' ? `primitive:${object.source.primitive}` : 'construction';
-}
-
-function readTransform(object: THREE.Object3D): Transform {
-  const { position: p, rotation: r, scale: s } = object;
-  return {
-    position: [p.x, p.y, p.z],
-    rotation: [r.x * RAD_TO_DEG, r.y * RAD_TO_DEG, r.z * RAD_TO_DEG],
-    scale: [s.x, s.y, s.z],
-  };
 }
 
 /**
@@ -87,6 +87,13 @@ export class ViewportEngine implements ViewportApi {
   private readonly gizmo: TransformControls;
   private readonly viewHelper: ViewHelper;
   private readonly vertexProxy = new THREE.Object3D();
+  /**
+   * The move/rotate/scale gizmo grabs this handle, placed at the middle of the selected
+   * object, so it sits on the object and turns and scales it around its centre even
+   * when the object's origin is elsewhere (a drawing made away from the board's 0, 0).
+   */
+  private readonly objectHandle = new THREE.Object3D();
+  private readonly boundsScratch = new THREE.Box3();
   private readonly selectionBox = new THREE.Box3();
   private readonly selectionBoxHelper: THREE.Box3Helper;
   private readonly primitives = new PrimitiveGeometryCache();
@@ -131,7 +138,7 @@ export class ViewportEngine implements ViewportApi {
     key.position.set(6, 10, 7);
     const fill = new THREE.DirectionalLight(0x9cc8ff, 0.5);
     fill.position.set(-8, 4, -6);
-    this.scene.add(hemisphere, key, fill, this.content, this.vertexProxy);
+    this.scene.add(hemisphere, key, fill, this.content, this.vertexProxy, this.objectHandle);
 
     this.selectionBoxHelper = new THREE.Box3Helper(this.selectionBox, ACCENT);
     this.selectionBoxHelper.visible = false;
@@ -216,9 +223,9 @@ export class ViewportEngine implements ViewportApi {
       const context = canvas.getContext('2d');
       if (!context) throw new Error('No 2D canvas available for the capture.');
       const glow = context.createRadialGradient(canvas.width / 2, canvas.height * 0.18, 0, canvas.width / 2, canvas.height * 0.18, canvas.width);
-      glow.addColorStop(0, '#142237');
-      glow.addColorStop(0.48, '#0b131e');
-      glow.addColorStop(1, '#06090d');
+      glow.addColorStop(0, '#0c1c37');
+      glow.addColorStop(0.52, '#050c1b');
+      glow.addColorStop(1, '#02050b');
       context.fillStyle = glow;
       context.fillRect(0, 0, canvas.width, canvas.height);
       context.drawImage(source, 0, 0, canvas.width, canvas.height);
@@ -561,7 +568,49 @@ export class ViewportEngine implements ViewportApi {
     }
     const mode: 'translate' | 'rotate' | 'scale' = state.tool;
     this.gizmo.setMode(mode);
-    if (this.gizmo.object !== node.object) this.gizmo.attach(node.object);
+    if (!this.drag) this.placeObjectHandle(node);
+    if (this.gizmo.object !== this.objectHandle) this.gizmo.attach(this.objectHandle);
+  }
+
+  /** World bounds of the meshes in an object and its children (helpers and outlines left out). */
+  private meshBounds(root: THREE.Object3D, box: THREE.Box3): THREE.Box3 {
+    box.makeEmpty();
+    root.updateWorldMatrix(true, true);
+    const part = new THREE.Box3();
+    root.traverseVisible((child) => {
+      if (!(child instanceof THREE.Mesh) || !child.userData.objectId) return;
+      const geometry = child.geometry as THREE.BufferGeometry;
+      if (!geometry.boundingBox) geometry.computeBoundingBox();
+      if (geometry.boundingBox && !geometry.boundingBox.isEmpty()) box.union(part.copy(geometry.boundingBox).applyMatrix4(child.matrixWorld));
+    });
+    return box;
+  }
+
+  /** Puts the gizmo handle in the middle of the object, turned like the object, at scale 1. */
+  private placeObjectHandle(node: ObjectNode): void {
+    const bounds = this.meshBounds(node.object, this.boundsScratch);
+    if (bounds.isEmpty()) node.object.getWorldPosition(this.objectHandle.position);
+    else bounds.getCenter(this.objectHandle.position);
+    node.object.getWorldQuaternion(this.objectHandle.quaternion);
+    this.objectHandle.scale.set(1, 1, 1);
+    this.objectHandle.updateMatrixWorld(true);
+  }
+
+  /** The object's new transform: the handle's change since the drag began, applied around the handle. */
+  private handleTransform(drag: Extract<DragState, { kind: 'object' }>): Transform {
+    this.objectHandle.updateMatrixWorld(true);
+    const world = this.objectHandle.matrixWorld.clone().multiply(drag.handleStartInverse).multiply(drag.objectStartWorld);
+    const local = drag.parentInverse.clone().multiply(world);
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    local.decompose(position, quaternion, scale);
+    const euler = new THREE.Euler().setFromQuaternion(quaternion, 'XYZ');
+    return {
+      position: [position.x, position.y, position.z],
+      rotation: [euler.x * RAD_TO_DEG, euler.y * RAD_TO_DEG, euler.z * RAD_TO_DEG],
+      scale: [scale.x, scale.y, scale.z],
+    };
   }
 
   private setHighlight(node: ObjectNode, selected: boolean, pointsMode: boolean): void {
@@ -622,7 +671,17 @@ export class ViewportEngine implements ViewportApi {
       };
     } else {
       const label = state.tool === 'rotate' ? 'Rotate' : state.tool === 'scale' ? 'Scale' : 'Move';
-      this.drag = { kind: 'object', id: object.id, before: cloneTransform(object.transform), label: `${label} ${object.name}` };
+      this.objectHandle.updateMatrixWorld(true);
+      node.object.updateWorldMatrix(true, false);
+      this.drag = {
+        kind: 'object',
+        id: object.id,
+        before: cloneTransform(object.transform),
+        label: `${label} ${object.name}`,
+        handleStartInverse: this.objectHandle.matrixWorld.clone().invert(),
+        objectStartWorld: node.object.matrixWorld.clone(),
+        parentInverse: node.object.parent ? node.object.parent.matrixWorld.clone().invert() : new THREE.Matrix4(),
+      };
     }
   };
 
@@ -635,8 +694,7 @@ export class ViewportEngine implements ViewportApi {
     const drag = this.drag;
     if (!drag || this.dragCancelled) return;
     if (drag.kind === 'object') {
-      const node = this.nodes.get(drag.id);
-      if (node) this.store.previewTransform(drag.id, readTransform(node.object));
+      this.store.previewTransform(drag.id, this.handleTransform(drag));
     } else {
       this.store.previewGraph(drag.id, moveVertex(drag.graphBefore, drag.vertexId, this.vertexLocalPosition(drag)));
     }
@@ -647,9 +705,7 @@ export class ViewportEngine implements ViewportApi {
     this.drag = null;
     if (!drag || this.dragCancelled) return;
     if (drag.kind === 'object') {
-      const node = this.nodes.get(drag.id);
-      if (!node) return;
-      const after = cleanTransform(readTransform(node.object));
+      const after = cleanTransform(this.handleTransform(drag));
       if (transformsEqual(drag.before, after)) this.store.previewTransform(drag.id, drag.before);
       else this.store.execute(new SetTransformCommand(drag.id, drag.before, after, drag.label));
       return;

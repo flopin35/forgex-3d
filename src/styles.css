@@ -1,35 +1,76 @@
 /*
-  FORGEX 3D interface.
-  Left: a navy blueprint board where dots and lines are drawn. Right: the 3D result.
-  Blue steel for structure and selection; molten orange for the active chain, picks
-  and point editing, so the "forge" moments stand out. Everything else stays quiet.
+  FORGEX 3D interface: "holo-forge".
+  A car-design studio's holographic workbench. Floating glass modules with cut
+  corners sit over a dark void; the board on the left is a light table whose ink
+  glows plasma cyan, the 3D bay on the right has a lit floor. Plasma marks
+  structure and selection; forge amber is reserved for hot moments (the line being
+  drawn, picked dots, point editing, unsaved work). Chakra Petch sets the display
+  type; body text stays in the system face for legibility.
 */
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/ChakraPetch-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/ChakraPetch-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/ChakraPetch-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/fonts/ChakraPetch-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
-  --bg: #070a0f;
-  --panel: #0c1118;
-  --panel-raised: #111822;
-  --field: #0a0f15;
-  --line: #19222d;
-  --line-strong: #243140;
-  --text: #d8e1eb;
-  --text-muted: #8494a7;
-  --text-faint: #566577;
-  --accent: #38b2ff;
-  --accent-strong: #1590e6;
-  --accent-soft: rgba(56, 178, 255, 0.14);
-  --forge: #ffb02e;
-  --forge-soft: rgba(255, 176, 46, 0.14);
-  --axis-x: #f0606f;
-  --axis-y: #6fd283;
-  --axis-z: #4f9dff;
-  --ok: #5cc98a;
-  --warn: #e8b04a;
-  --error: #f06a5a;
-  --radius: 6px;
-  --board-bg: #0a1626;
-  --board-ink: #d3ebff;
-  --board-cyan: #62cbff;
+  /* The void behind everything and the glass the modules are made of. */
+  --void: #02050b;
+  --bg: var(--void);
+  --panel: rgba(8, 15, 29, 0.82);
+  --panel-raised: rgba(22, 36, 62, 0.62);
+  --field: rgba(2, 7, 16, 0.72);
+  --line: rgba(112, 196, 255, 0.11);
+  --line-strong: rgba(112, 196, 255, 0.24);
+  --text: #e4f2ff;
+  --text-muted: #8ea6c3;
+  --text-faint: #536b8b;
+  /* Plasma: structure, selection, the primary action. */
+  --accent: #2fe3ff;
+  --accent-strong: #08a8ff;
+  --accent-soft: rgba(47, 227, 255, 0.11);
+  --accent-glow: 0 0 14px rgba(47, 227, 255, 0.38);
+  /* Forge amber: what is hot right now. */
+  --forge: #ffad3b;
+  --forge-soft: rgba(255, 173, 59, 0.13);
+  /* Ion violet: guides and the AI link. */
+  --ion: #a98bff;
+  --axis-x: #ff5470;
+  --axis-y: #5ff2a0;
+  --axis-z: #3aa9ff;
+  --ok: #4ee6a3;
+  --warn: #ffc65a;
+  --error: #ff5d6c;
+  --radius: 4px;
+  --cut: 12px;
+  --cut-small: 6px;
+  --board-bg: #020915;
+  --board-ink: #c8f6ff;
+  --board-cyan: #2fe3ff;
   --font: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --display: 'Chakra Petch', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
   --mono: 'Cascadia Mono', Consolas, 'SFMono-Regular', monospace;
   color-scheme: dark;
 }
@@ -594,10 +635,8 @@ h3 {
 }
 
 .shape-card-kicker {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font: 600 12.5px var(--display);
+  letter-spacing: 0.02em;
   color: var(--accent);
 }
 
@@ -1057,12 +1096,25 @@ h3 {
   position: absolute;
   top: 10px;
   left: 34px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(160, 210, 255, 0.55);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 500 12px var(--display);
+  color: rgba(170, 225, 255, 0.72);
   pointer-events: none;
+}
+
+.caption-axes {
+  display: flex;
+  gap: 4px;
+}
+
+.caption-axes span {
+  padding: 1px 6px;
+  border: 1px solid rgba(47, 227, 255, 0.22);
+  color: rgba(170, 225, 255, 0.6);
+  font-size: 11px;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
 }
 
 .board-option {
@@ -1730,7 +1782,7 @@ h3 {
 .diagnostics {
   display: flex;
   flex-direction: column;
-  height: 132px;
+  height: 116px;
   background: var(--panel);
   border-top: 1px solid var(--line);
 }
@@ -1956,5 +2008,896 @@ h3 {
   * {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+/* =====================================================================
+   Holo-forge finish
+   Floating glass modules over the void, cut corners, light catching the
+   glass edges (plasma top-left, ion bottom-right), a glowing light table.
+   ===================================================================== */
+
+body {
+  background:
+    radial-gradient(1100px 680px at 8% -12%, rgba(47, 227, 255, 0.09), transparent 62%),
+    radial-gradient(900px 620px at 104% 112%, rgba(169, 139, 255, 0.09), transparent 60%),
+    var(--void);
+}
+
+.app {
+  position: relative;
+  isolation: isolate;
+  gap: 6px;
+  padding: 6px;
+  grid-template-rows: 46px minmax(0, 1fr) auto 24px;
+}
+
+/* A faint dot lattice in the void between the modules. */
+.app::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  background-image: radial-gradient(rgba(120, 205, 255, 0.13) 1px, transparent 1.3px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 45%, #000 25%, transparent 80%);
+  mask-image: radial-gradient(ellipse at 50% 45%, #000 25%, transparent 80%);
+  pointer-events: none;
+}
+
+.workspace {
+  gap: 6px;
+}
+
+/* -- Modules: glass slabs with cut corners and a lit edge ------------------ */
+
+.topbar,
+.board,
+.viewport,
+.sidebar,
+.diagnostics,
+.statusbar {
+  --module-cut: var(--cut);
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  border: 0;
+  animation: module-in 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.topbar::before,
+.board::before,
+.viewport::before,
+.sidebar::before,
+.diagnostics::before,
+.statusbar::before,
+.topbar::after,
+.board::after,
+.viewport::after,
+.sidebar::after,
+.diagnostics::after,
+.statusbar::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  clip-path: polygon(
+    var(--module-cut) 0,
+    100% 0,
+    100% calc(100% - var(--module-cut)),
+    calc(100% - var(--module-cut)) 100%,
+    0 100%,
+    0 var(--module-cut)
+  );
+}
+
+/* The edge: a gradient seen through a 1 px gap between the two layers. */
+.topbar::before,
+.board::before,
+.viewport::before,
+.sidebar::before,
+.diagnostics::before,
+.statusbar::before {
+  inset: 0;
+  z-index: -2;
+  background: linear-gradient(
+    135deg,
+    rgba(47, 227, 255, 0.62) 0%,
+    rgba(112, 196, 255, 0.16) 18%,
+    rgba(112, 196, 255, 0.08) 62%,
+    rgba(169, 139, 255, 0.42) 100%
+  );
+}
+
+/* The glass itself. */
+.topbar::after,
+.board::after,
+.sidebar::after,
+.diagnostics::after,
+.statusbar::after {
+  inset: 1px;
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(14, 25, 46, 0.86), rgba(6, 12, 24, 0.9));
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+.viewport::after {
+  inset: 1px;
+  z-index: -1;
+  background:
+    radial-gradient(90% 55% at 50% 104%, rgba(47, 227, 255, 0.16), transparent 70%),
+    radial-gradient(120% 90% at 50% 0%, #0c1c37 0%, #050c1b 52%, #02050b 100%);
+}
+
+.topbar {
+  z-index: 30;
+  --module-cut: 14px;
+}
+
+.statusbar,
+.diagnostics {
+  --module-cut: var(--cut-small);
+}
+
+/* Keep content inside the cut corners. */
+.viewport-host {
+  inset: 1px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+
+.board {
+  grid-template-rows: 42px minmax(0, 1fr) 28px;
+}
+
+.board-header,
+.tool-rail,
+.board-footer,
+.panel,
+.hierarchy,
+.inspector {
+  background: transparent;
+}
+
+.sidebar {
+  border-left: 0;
+}
+
+.hierarchy {
+  border-bottom: 1px solid var(--line);
+}
+
+@keyframes module-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.topbar {
+  animation-delay: 0ms;
+}
+
+.board {
+  animation-delay: 70ms;
+}
+
+.viewport {
+  animation-delay: 140ms;
+}
+
+.sidebar {
+  animation-delay: 210ms;
+}
+
+.diagnostics,
+.statusbar {
+  animation-delay: 260ms;
+}
+
+/* -- Type ----------------------------------------------------------------- */
+
+.brand-name,
+.panel-header h2,
+.inspector-section h3,
+.menu-trigger,
+.segmented button,
+.text-button,
+.mode-switch button,
+.board-picker select,
+.diagnostics-tabs [role='tab'],
+.shape-card-name,
+.stat-grid dd,
+.slider-label,
+.vector-label,
+.board-empty-title,
+.viewport-empty-title,
+.board-footer,
+.statusbar,
+.compact-select select,
+.board-option,
+.reference-panel h3 {
+  font-family: var(--display);
+}
+
+.brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  background: linear-gradient(90deg, #e9fbff, #7beeff 60%, #2fe3ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand svg {
+  filter: drop-shadow(0 0 6px rgba(47, 227, 255, 0.55));
+}
+
+.panel-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.inspector-section h3 {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #b5ccea;
+}
+
+.vector-label,
+.slider-label {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.stat-grid dd {
+  font-weight: 600;
+  color: #dff8ff;
+}
+
+.statusbar {
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  background: transparent;
+  border-top: 0;
+}
+
+/* -- Controls --------------------------------------------------------------- */
+
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(47, 227, 255, 0.18);
+}
+
+.icon-button,
+.rail-button {
+  border-radius: 3px;
+  transition: color 120ms, background 120ms, box-shadow 120ms;
+}
+
+.icon-button:hover:not(:disabled),
+.rail-button:hover:not(:disabled) {
+  color: #e9fbff;
+  background: rgba(47, 227, 255, 0.07);
+}
+
+.icon-button.is-active,
+.rail-button.is-active {
+  color: var(--accent);
+  background: linear-gradient(180deg, rgba(47, 227, 255, 0.16), rgba(47, 227, 255, 0.05));
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px rgba(47, 227, 255, 0.32);
+}
+
+.icon-button.is-active svg,
+.rail-button.is-active svg {
+  filter: drop-shadow(0 0 5px rgba(47, 227, 255, 0.75));
+}
+
+.rail-button.is-active {
+  box-shadow:
+    inset 2px 0 0 var(--accent),
+    inset 0 0 0 1px rgba(47, 227, 255, 0.28);
+}
+
+.icon-button.is-points {
+  color: var(--forge);
+  background: var(--forge-soft);
+  box-shadow: inset 0 0 0 1px rgba(255, 173, 59, 0.4);
+}
+
+.icon-button.is-points svg {
+  filter: drop-shadow(0 0 5px rgba(255, 173, 59, 0.75));
+}
+
+.tool-group,
+.snap-control,
+.segmented {
+  background: rgba(2, 8, 18, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  clip-path: polygon(var(--cut-small) 0, 100% 0, 100% calc(100% - var(--cut-small)), calc(100% - var(--cut-small)) 100%, 0 100%, 0 var(--cut-small));
+}
+
+.segmented button {
+  border-radius: 0;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.segmented button.is-active {
+  color: var(--accent);
+  background: linear-gradient(180deg, rgba(47, 227, 255, 0.05), rgba(47, 227, 255, 0.16));
+  box-shadow: inset 0 -2px 0 var(--accent);
+  text-shadow: 0 0 10px rgba(47, 227, 255, 0.6);
+}
+
+.text-button {
+  height: 30px;
+  padding: 0 13px;
+  border-radius: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  background: linear-gradient(180deg, rgba(42, 68, 108, 0.5), rgba(14, 26, 48, 0.6));
+  border: 1px solid var(--line-strong);
+  clip-path: polygon(var(--cut-small) 0, 100% 0, 100% calc(100% - var(--cut-small)), calc(100% - var(--cut-small)) 100%, 0 100%, 0 var(--cut-small));
+  transition: border-color 120ms, background 120ms, color 120ms;
+}
+
+.text-button:hover:not(:disabled) {
+  border-color: rgba(47, 227, 255, 0.62);
+  color: #f2fdff;
+  background: linear-gradient(180deg, rgba(47, 227, 255, 0.2), rgba(14, 26, 48, 0.6));
+}
+
+.text-button.is-primary {
+  color: #001521;
+  font-weight: 700;
+  border-color: transparent;
+  background: linear-gradient(100deg, #6ff3ff 0%, #2fe3ff 40%, #08a8ff 100%);
+}
+
+.text-button.is-primary:hover:not(:disabled) {
+  color: #001521;
+  border-color: transparent;
+  background: linear-gradient(100deg, #a3f8ff 0%, #4ae8ff 40%, #29b6ff 100%);
+}
+
+.text-button.is-active {
+  border-color: rgba(255, 173, 59, 0.7);
+  background: linear-gradient(180deg, rgba(255, 173, 59, 0.2), rgba(255, 173, 59, 0.06));
+}
+
+.number-field,
+.hex-input,
+.name-input,
+.board-picker select,
+.board-option input,
+.color-picker {
+  background: rgba(1, 6, 14, 0.7);
+  border-color: var(--line-strong);
+  border-radius: 2px;
+}
+
+.number-field:focus-within,
+.hex-input:focus,
+.name-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(47, 227, 255, 0.12), 0 0 12px rgba(47, 227, 255, 0.18);
+}
+
+.name-input {
+  font-family: var(--display);
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.number-label {
+  font-family: var(--display);
+}
+
+.switch-row input:checked + .switch {
+  background: linear-gradient(90deg, #08a8ff, #2fe3ff);
+  box-shadow: 0 0 10px rgba(47, 227, 255, 0.45);
+}
+
+.slider-row input[type='range'] {
+  accent-color: var(--accent);
+}
+
+/* -- Top bar ------------------------------------------------------------------ */
+
+.topbar {
+  gap: 16px;
+  padding: 0 14px 0 18px;
+}
+
+.menu-trigger {
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  border-radius: 0;
+}
+
+.menu-trigger:hover,
+.menu-trigger.is-open {
+  color: var(--accent);
+  background: rgba(47, 227, 255, 0.08);
+  text-shadow: 0 0 10px rgba(47, 227, 255, 0.55);
+}
+
+.menu-list {
+  padding: 6px;
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(12, 22, 42, 0.97), rgba(5, 11, 22, 0.97)) padding-box,
+    linear-gradient(135deg, rgba(47, 227, 255, 0.7), rgba(112, 196, 255, 0.14) 30%, rgba(169, 139, 255, 0.45)) border-box;
+  border: 1px solid transparent;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.menu-item {
+  border-radius: 0;
+}
+
+.menu-item:hover:not(:disabled) {
+  background: linear-gradient(90deg, rgba(47, 227, 255, 0.18), rgba(47, 227, 255, 0.02));
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.project-name {
+  font-family: var(--display);
+  letter-spacing: 0.03em;
+}
+
+.dirty-dot {
+  box-shadow: 0 0 8px var(--forge);
+}
+
+/* -- Splitter: a seam of light between the two bays ------------------------ */
+
+.splitter {
+  background: transparent;
+}
+
+.splitter::before {
+  content: '';
+  position: absolute;
+  top: 12%;
+  bottom: 12%;
+  left: 50%;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(47, 227, 255, 0.35), transparent);
+  transition: background 150ms;
+}
+
+.splitter:hover,
+.splitter:active {
+  background: transparent;
+}
+
+.splitter:hover::before,
+.splitter:active::before {
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.splitter-grip {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 0;
+  background: var(--accent);
+  transform: rotate(45deg);
+  box-shadow: 0 0 8px var(--accent);
+  opacity: 0.6;
+}
+
+/* -- The board: a light table ------------------------------------------------- */
+
+.board-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.tool-rail {
+  border-right: 1px solid var(--line);
+}
+
+.board-canvas {
+  background:
+    repeating-linear-gradient(0deg, rgba(47, 227, 255, 0.022) 0 1px, transparent 1px 3px),
+    radial-gradient(110% 80% at 50% 0%, rgba(47, 227, 255, 0.1), transparent 62%),
+    radial-gradient(80% 70% at 50% 110%, rgba(169, 139, 255, 0.07), transparent 70%),
+    var(--board-bg);
+}
+
+/* Registration marks in the corners of the light table and the 3D bay. */
+.board-canvas::after,
+.viewport-host::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  pointer-events: none;
+  z-index: 2;
+  --mark: rgba(47, 227, 255, 0.55);
+  background:
+    linear-gradient(var(--mark), var(--mark)) top left / 16px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) top left / 1px 16px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) top right / 16px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) top right / 1px 16px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom left / 16px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom left / 1px 16px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom right / 16px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom right / 1px 16px no-repeat;
+}
+
+.viewport-host::after {
+  inset: 14px;
+  --mark: rgba(47, 227, 255, 0.35);
+}
+
+/* One scan across the light table when the app opens. */
+.board-canvas::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -30%;
+  height: 30%;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(47, 227, 255, 0.1) 70%, rgba(47, 227, 255, 0.45) 99%, transparent);
+  opacity: 0;
+  animation: board-scan 1500ms 350ms cubic-bezier(0.4, 0, 0.2, 1) 1;
+}
+
+@keyframes board-scan {
+  0% {
+    top: -30%;
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.grid-minor {
+  stroke: rgba(47, 227, 255, 0.055);
+}
+
+.grid-major {
+  stroke: rgba(47, 227, 255, 0.15);
+}
+
+.axis-ground {
+  stroke: rgba(47, 227, 255, 0.5);
+}
+
+.axis-vertical {
+  stroke: rgba(47, 227, 255, 0.24);
+}
+
+.board-rulers text {
+  fill: rgba(130, 220, 255, 0.5);
+  font-family: var(--display);
+  font-size: 10.5px;
+}
+
+.board-line {
+  stroke: var(--board-ink);
+  stroke-width: 1.8;
+}
+
+.board-line.is-hover {
+  stroke: #ffffff;
+  stroke-width: 3;
+}
+
+.board-line.is-selected {
+  stroke: var(--forge);
+}
+
+.board-dot {
+  fill: #020915;
+  stroke: #7cefff;
+  stroke-width: 1.8;
+}
+
+.board-dot.is-hover {
+  fill: rgba(47, 227, 255, 0.35);
+  stroke: #ffffff;
+}
+
+.board-dot.is-chain,
+.board-dot.is-selected {
+  filter: drop-shadow(0 0 5px rgba(255, 173, 59, 0.9));
+}
+
+.board-cursor {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 4px rgba(47, 227, 255, 0.8));
+}
+
+.board-rubber {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 3px rgba(47, 227, 255, 0.8));
+}
+
+.board-length {
+  font-family: var(--display);
+  stroke: #020915;
+}
+
+.board-footer {
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  border-top: 1px solid var(--line);
+}
+
+.board-coords {
+  font-family: var(--display);
+  color: #9fdcf0;
+}
+
+.board-picker select {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  max-width: 190px;
+}
+
+/* -- 3D bay overlays ------------------------------------------------------------ */
+
+.view-toolbar,
+.shape-card,
+.reference-panel,
+.board-option {
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(12, 22, 42, 0.9), rgba(5, 11, 22, 0.92)) padding-box,
+    linear-gradient(135deg, rgba(47, 227, 255, 0.7), rgba(112, 196, 255, 0.14) 28%, rgba(112, 196, 255, 0.08) 70%, rgba(169, 139, 255, 0.5)) border-box;
+  border: 1px solid transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+
+.view-toolbar {
+  top: 14px;
+  left: 14px;
+  padding: 4px;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+
+.shape-card {
+  top: 14px;
+  right: 14px;
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+}
+
+.reference-panel {
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+}
+
+.board-option {
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+
+@container (max-width: 600px) {
+  .shape-card {
+    top: 58px;
+  }
+}
+
+.shape-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.mode-switch button {
+  border-radius: 0;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  background: rgba(2, 8, 18, 0.6);
+  border-color: var(--line);
+  clip-path: polygon(var(--cut-small) 0, 100% 0, 100% calc(100% - var(--cut-small)), calc(100% - var(--cut-small)) 100%, 0 100%, 0 var(--cut-small));
+}
+
+.mode-switch button.is-active {
+  color: var(--accent);
+  border-color: rgba(47, 227, 255, 0.6);
+  background: linear-gradient(180deg, rgba(47, 227, 255, 0.2), rgba(47, 227, 255, 0.04));
+  text-shadow: 0 0 10px rgba(47, 227, 255, 0.6);
+}
+
+.mode-switch button.is-active svg {
+  filter: drop-shadow(0 0 6px rgba(47, 227, 255, 0.8));
+}
+
+.mode-chip,
+.hud-item {
+  border-radius: 0;
+  font-family: var(--display);
+  letter-spacing: 0.03em;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+
+.viewport-help {
+  left: 22px;
+  bottom: 18px;
+  font-family: var(--display);
+  letter-spacing: 0.03em;
+  color: rgba(140, 190, 230, 0.45);
+}
+
+.viewport-empty svg,
+.board-empty svg {
+  color: var(--accent);
+  filter: drop-shadow(0 0 10px rgba(47, 227, 255, 0.7));
+}
+
+.board-empty-title,
+.viewport-empty-title {
+  font-size: 17px;
+  letter-spacing: 0.03em;
+}
+
+/* -- Scene list and properties ------------------------------------------------------ */
+
+.tree-row {
+  border-radius: 0;
+}
+
+.tree-row:hover {
+  background: rgba(47, 227, 255, 0.05);
+}
+
+.tree-row.is-selected {
+  background: linear-gradient(90deg, rgba(47, 227, 255, 0.2), rgba(47, 227, 255, 0.03) 80%);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.tree-row.is-selected .tree-name {
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(47, 227, 255, 0.5);
+}
+
+.tree-row.is-selected .tree-icon {
+  color: var(--accent);
+}
+
+.inspector-section {
+  border-top-color: var(--line);
+}
+
+.stat-grid div {
+  border-radius: 0;
+  background: rgba(1, 6, 14, 0.6);
+  border-color: var(--line);
+  clip-path: polygon(var(--cut-small) 0, 100% 0, 100% calc(100% - var(--cut-small)), calc(100% - var(--cut-small)) 100%, 0 100%, 0 var(--cut-small));
+}
+
+.swatch {
+  border-radius: 0;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+}
+
+.swatch.is-current {
+  box-shadow: inset 0 0 0 2px #ffffff;
+  clip-path: none;
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* -- Diagnostics -------------------------------------------------------------------- */
+
+.diagnostics {
+  border-top: 0;
+}
+
+.diagnostics-tabs [role='tab'] {
+  border-radius: 0;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.diagnostics-tabs [role='tab'].is-active {
+  color: var(--accent);
+  background: transparent;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.badge {
+  border-radius: 0;
+  font-family: var(--display);
+}
+
+.status-badge,
+.status-ai {
+  border-radius: 0;
+}
+
+.status-dirty {
+  text-shadow: 0 0 8px rgba(255, 173, 59, 0.6);
+}
+
+/* -- Scrollbars --------------------------------------------------------------------- */
+
+::-webkit-scrollbar-thumb {
+  background: rgba(47, 227, 255, 0.22);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(47, 227, 255, 0.4);
+  background-clip: padding-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-canvas::before {
+    display: none;
+  }
+}
+
+/* The board header wraps onto two rows when the board is narrow, instead of overlapping. */
+.board {
+  grid-template-rows: auto minmax(0, 1fr) 28px;
+}
+
+.board-header {
+  flex-wrap: wrap;
+  row-gap: 6px;
+  min-height: 42px;
+  padding: 6px 8px;
+}
+
+.board-picker {
+  flex: 1 1 130px;
+  min-width: 130px;
+  max-width: 220px;
+}
+
+.board-picker select {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.board-header .segmented {
+  flex: none;
+}
+
+.board {
+  container-type: inline-size;
+}
+
+.board-picker {
+  max-width: 180px;
+}
+
+/* On a narrow board the Pictures button keeps only its icon. */
+@container (max-width: 700px) {
+  .board-header .button-label {
+    display: none;
+  }
+
+  .board-header .text-button.is-quiet {
+    padding: 0 9px;
   }
 }
