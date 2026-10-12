@@ -1,0 +1,162 @@
+{
+  "format": "forgex-project",
+  "version": 2,
+  "generator": "FORGEX 3D 0.1.0",
+  "savedAt": "2026-10-12T13:31:19.531Z",
+  "units": {
+    "lengthUnit": "meters",
+    "upAxis": "+Y",
+    "forwardAxis": "+Z",
+    "handedness": "right",
+    "rotation": "degrees-xyz"
+  },
+  "settings": {
+    "gridSize": 0.25,
+    "snapEnabled": true,
+    "rotationSnapDegrees": 15
+  },
+  "scene": {
+    "rootIds": [
+      "obj_0c389f7d1754c37d"
+    ],
+    "objects": [
+      {
+        "id": "obj_0c389f7d1754c37d",
+        "name": "Sword",
+        "kind": "mesh",
+        "parentId": null,
+        "childIds": [],
+        "visible": true,
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "material": {
+          "color": "#9fc3e8"
+        },
+        "source": {
+          "type": "sketch",
+          "plane": "front",
+          "points": [
+            {
+              "id": "p1",
+              "x": 0,
+              "y": 1.6
+            },
+            {
+              "id": "p2",
+              "x": 0.08,
+              "y": 1.44
+            },
+            {
+              "id": "p3",
+              "x": 0.08,
+              "y": 0.5
+            },
+            {
+              "id": "p4",
+              "x": 0.32,
+              "y": 0.5
+            },
+            {
+              "id": "p5",
+              "x": 0.32,
+              "y": 0.4
+            },
+            {
+              "id": "p6",
+              "x": 0.045,
+              "y": 0.4
+            },
+            {
+              "id": "p7",
+              "x": 0.045,
+              "y": 0.1
+            },
+            {
+              "id": "p8",
+              "x": 0.09,
+              "y": 0.1
+            },
+            {
+              "id": "p9",
+              "x": 0.09,
+              "y": 0
+            },
+            {
+              "id": "p10",
+              "x": 0,
+              "y": 0
+            }
+          ],
+          "lines": [
+            {
+              "id": "l1",
+              "a": "p1",
+              "b": "p2"
+            },
+            {
+              "id": "l2",
+              "a": "p2",
+              "b": "p3"
+            },
+            {
+              "id": "l3",
+              "a": "p3",
+              "b": "p4"
+            },
+            {
+              "id": "l4",
+              "a": "p4",
+              "b": "p5"
+            },
+            {
+              "id": "l5",
+              "a": "p5",
+              "b": "p6"
+            },
+            {
+              "id": "l6",
+              "a": "p6",
+              "b": "p7"
+            },
+            {
+              "id": "l7",
+              "a": "p7",
+              "b": "p8"
+            },
+            {
+              "id": "l8",
+              "a": "p8",
+              "b": "p9"
+            },
+            {
+              "id": "l9",
+              "a": "p9",
+              "b": "p10"
+            }
+          ],
+          "shape": {
+            "mode": "extrude",
+            "depth": 0.06,
+            "segments": 32,
+            "mirror": true
+          }
+        }
+      }
+    ]
+  }
+}

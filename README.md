@@ -122,7 +122,7 @@ Board:
 
 The automated version is `src/core/geometry/cubeTest.test.ts`.
 
-`examples/kart-blockout.forgex` is a small sample project: a grouped kart with a point-built wedge body.
+`examples/kart-blockout.forgex` is a small sample project: a grouped kart with a point-built wedge body. `examples/sword.forgex` is the blueprint sword the app opens with, and `examples/sword.glb` is its export.
 
 ## World conventions
 
