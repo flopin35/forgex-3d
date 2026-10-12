@@ -6,6 +6,17 @@ import { PROJECT_EXTENSION } from '../core/project/projectFile';
 import type { PlatformFiles } from './files';
 
 const FILTERS = [{ name: 'FORGEX 3D project', extensions: [PROJECT_EXTENSION] }];
+const EXPORT_FILTERS = [{ name: 'glTF binary model (Blender, Roblox)', extensions: ['glb'] }];
+
+/** Base64 keeps the IPC payload a plain string; Rust decodes it before writing. */
+function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
 
 /** File access through the Tauri shell. Reading and writing happen in Rust (src-tauri/src/project_files.rs). */
 export function createDesktopFiles(): PlatformFiles {
@@ -33,6 +44,14 @@ export function createDesktopFiles(): PlatformFiles {
 
     async writeProjectFile(path, contents) {
       await invoke('write_project_file', { path, contents });
+    },
+
+    async chooseExportPath(suggestedName) {
+      return save({ title: 'Export model', defaultPath: suggestedName, filters: EXPORT_FILTERS });
+    },
+
+    async writeExportFile(path, bytes) {
+      await invoke('write_export_file', { path, data: toBase64(bytes) });
     },
 
     confirm(title, message) {

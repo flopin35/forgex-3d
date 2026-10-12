@@ -2,7 +2,7 @@
 
 A `.forgex` file is a UTF-8 JSON document. It stores the **editable source** of a project (the scene graph and construction graphs), never only the generated triangles, so everything you build can be reopened and edited.
 
-Current version: **1**. Reading and validation live in `src/core/project/projectFile.ts`.
+Current version: **2** (version 2 added blueprint sources; version 1 files open unchanged). Reading and validation live in `src/core/project/projectFile.ts`.
 
 ## Top level
 
@@ -66,6 +66,24 @@ Meshes also have `material.color` (`#rrggbb`) and a `source`:
 - A face lists its boundary loop in order; counter-clockwise around the outward normal (right-hand rule).
 - Ids are stable. New ids continue after the highest existing number, so ids are never reused.
 
+### Blueprint (drawn on the board)
+
+```json
+{
+  "type": "sketch",
+  "plane": "front",
+  "points": [{ "id": "p1", "x": 0, "y": 1.6 }, { "id": "p2", "x": 0.08, "y": 1.44 }],
+  "lines": [{ "id": "l1", "a": "p1", "b": "p2" }],
+  "shape": { "mode": "extrude", "depth": 0.06, "segments": 32, "mirror": true }
+}
+```
+
+- `plane` is `front` (x = +X, y = +Y), `side` (seen from the right: x = −Z, y = +Y) or `top` (seen from above: x = +X, y = −Z). Positions are metres in the object's local space.
+- Closed loops of lines are filled; a loop inside a filled loop is a hole, and a loop inside a hole is filled again. Lines that close nothing stay as lines (extruded, they become thin walls).
+- `shape.mode`: `flat` (a panel), `extrude` (thickness `depth` metres; centred on the plane, except `top` drawings, which grow upwards from the ground), or `revolve` (spun around the vertical axis x = 0 in `segments` steps).
+- `shape.mirror` copies the drawing across x = 0; dots on the axis are shared by both halves.
+- Only the drawing is stored. The 3D mesh is generated from it on load, so it always matches.
+
 ## Rules checked on load
 
 The file is rejected, with every problem listed, when:
@@ -73,6 +91,7 @@ The file is rejected, with every problem listed, when:
 - it is not JSON, not a FORGEX project, or from a newer format version;
 - an object id is missing, too long or used twice; a field has the wrong type; a number is not finite; a colour is not `#rrggbb`;
 - the hierarchy is inconsistent: a `parentId` does not match the parent's `childIds`, an object appears twice, an object is unreachable from `rootIds`, or an object is inside itself;
+- a blueprint has a line to a missing dot, a line from a dot to itself, a duplicate id, or an unknown plane or shape mode;
 - a construction graph breaks a structural invariant: duplicate ids, an edge to a missing vertex, an edge from a vertex to itself, two edges between the same pair of vertices, or a face that repeats a vertex, has fewer than 3 vertices or has a side with no edge.
 
 These load with a warning instead: faces that are no longer flat, zero-area faces, edges shared by more than two faces, and inconsistent face winding.

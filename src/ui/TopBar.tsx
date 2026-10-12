@@ -1,27 +1,22 @@
+import { useSyncExternalStore } from 'react';
+import { boardStore } from '../app/boardState';
 import { useActions, useEditor } from '../app/EditorContext';
-import type { ToolMode } from '../core/editor/editorStore';
-import { isConstructionMesh } from '../core/scene/types';
+import { isConstructionMesh, isSketchMesh } from '../core/scene/types';
 import { GRID_PRESETS } from '../core/units';
-import { BrandMark, Icon, type IconName } from './icons';
+import { BrandMark, Icon } from './icons';
 import { Menu, type MenuEntry } from './Menu';
-
-const TOOLS: { tool: ToolMode; label: string; key: string; icon: IconName }[] = [
-  { tool: 'select', label: 'Select', key: 'Q', icon: 'select' },
-  { tool: 'translate', label: 'Move', key: 'W', icon: 'move' },
-  { tool: 'rotate', label: 'Rotate', key: 'E', icon: 'rotate' },
-  { tool: 'scale', label: 'Scale', key: 'R', icon: 'scale' },
-];
 
 export function TopBar() {
   const actions = useActions();
   const history = useEditor((s) => s.history);
-  const tool = useEditor((s) => s.tool);
   const editMode = useEditor((s) => s.editMode);
   const settings = useEditor((s) => s.settings);
   const project = useEditor((s) => s.project);
   const dirty = useEditor((s) => s.dirty);
   const hasSelection = useEditor((s) => s.selectedId !== null);
   const canEditPoints = useEditor((s) => isConstructionMesh(s.selectedId ? s.scene.objects[s.selectedId] : null));
+  const isBlueprint = useEditor((s) => isSketchMesh(s.selectedId ? s.scene.objects[s.selectedId] : null));
+  const board = useSyncExternalStore(boardStore.subscribe, boardStore.getState);
   const pointsMode = editMode === 'points';
 
   const fileMenu: MenuEntry[] = [
@@ -30,6 +25,8 @@ export function TopBar() {
     { separator: true },
     { label: 'Save', shortcut: 'Ctrl+S', onSelect: () => void actions.saveProject() },
     { label: 'Save as…', shortcut: 'Ctrl+Shift+S', onSelect: () => void actions.saveProjectAs() },
+    { separator: true },
+    { label: 'Export model (.glb)…', shortcut: 'Ctrl+E', onSelect: () => void actions.exportGlb() },
   ];
   const editMenu: MenuEntry[] = [
     { label: history.undoLabel ? `Undo ${history.undoLabel}` : 'Undo', shortcut: 'Ctrl+Z', onSelect: actions.undo, disabled: !history.canUndo },
@@ -37,7 +34,10 @@ export function TopBar() {
     { separator: true },
     { label: 'Duplicate', shortcut: 'Ctrl+D', onSelect: actions.duplicateSelection, disabled: !hasSelection },
     { label: 'Group', shortcut: 'Ctrl+G', onSelect: actions.groupSelection, disabled: !hasSelection },
-    { label: 'Delete', shortcut: 'Del', onSelect: actions.deleteSelection, disabled: !hasSelection },
+    { label: 'Delete object', onSelect: actions.deleteSelection, disabled: !hasSelection },
+    { separator: true },
+    { label: 'Mirror drawing', shortcut: 'M', onSelect: actions.toggleMirror, disabled: !isBlueprint },
+    { label: 'Convert blueprint to points', onSelect: () => actions.convertToPoints(), disabled: !isBlueprint },
     { separator: true },
     { label: pointsMode ? 'Leave points mode' : 'Edit points', shortcut: 'Tab', onSelect: actions.togglePointsMode, disabled: !canEditPoints },
     { label: 'Fill closed loops', onSelect: actions.fillLoops, disabled: !canEditPoints },
@@ -45,12 +45,25 @@ export function TopBar() {
     { label: 'Check geometry', onSelect: actions.checkGeometry, disabled: !canEditPoints },
   ];
   const createMenu: MenuEntry[] = [
+    { label: 'Blueprint seen from the front', onSelect: () => actions.startNewBlueprint('front') },
+    { label: 'Blueprint seen from the side', onSelect: () => actions.startNewBlueprint('side') },
+    { label: 'Blueprint seen from the top', onSelect: () => actions.startNewBlueprint('top') },
+    { separator: true },
     { label: 'Cube', onSelect: () => actions.addPart('cube') },
     { label: 'Plane', onSelect: () => actions.addPart('plane') },
     { label: 'Sphere', onSelect: () => actions.addPart('sphere') },
     { label: 'Cylinder', onSelect: () => actions.addPart('cylinder') },
     { separator: true },
     { label: 'Empty group', onSelect: () => actions.addPart('group') },
+  ];
+  const viewMenu: MenuEntry[] = [
+    { label: board.sidebar ? 'Hide scene panels' : 'Show scene panels', shortcut: 'Ctrl+B', onSelect: () => boardStore.set({ sidebar: !board.sidebar }) },
+    { label: board.turntable ? 'Stop turntable' : 'Turntable spin', shortcut: 'T', onSelect: actions.toggleTurntable },
+    { label: 'Frame selection', shortcut: 'F', onSelect: actions.frameSelection },
+    { separator: true },
+    { label: 'Board and 3D side by side', onSelect: () => boardStore.set({ split: 0.5 }) },
+    { label: 'Bigger board', onSelect: () => boardStore.set({ split: 0.62 }) },
+    { label: 'Bigger 3D view', onSelect: () => boardStore.set({ split: 0.38 }) },
   ];
 
   return (
@@ -63,9 +76,10 @@ export function TopBar() {
         <Menu label="File" entries={fileMenu} />
         <Menu label="Edit" entries={editMenu} />
         <Menu label="Create" entries={createMenu} />
+        <Menu label="View" entries={viewMenu} />
       </nav>
 
-      <div className="toolbar" role="toolbar" aria-label="Editing tools">
+      <div className="toolbar" role="toolbar" aria-label="History and 3D snapping">
         <div className="tool-group">
           <button type="button" className="icon-button" onClick={actions.undo} disabled={!history.canUndo} title={`Undo ${history.undoLabel ?? ''} (Ctrl+Z)`}>
             <Icon name="undo" />
@@ -75,58 +89,19 @@ export function TopBar() {
           </button>
         </div>
 
-        <div className="tool-group" role="radiogroup" aria-label="Transform tool">
-          {TOOLS.map((item) => {
-            const unavailable = pointsMode && (item.tool === 'rotate' || item.tool === 'scale');
-            return (
-              <button
-                key={item.tool}
-                type="button"
-                role="radio"
-                aria-checked={tool === item.tool}
-                className={`icon-button ${tool === item.tool ? 'is-active' : ''}`}
-                onClick={() => actions.setTool(item.tool)}
-                disabled={unavailable}
-                title={unavailable ? `${item.label} works on whole objects; points move only` : `${item.label} (${item.key})`}
-              >
-                <Icon name={item.icon} />
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="tool-group">
-          <button
-            type="button"
-            className={`icon-button ${pointsMode ? 'is-active is-points' : ''}`}
-            onClick={actions.togglePointsMode}
-            disabled={!canEditPoints && !pointsMode}
-            aria-pressed={pointsMode}
-            title="Edit points (Tab)"
-          >
-            <Icon name="points" />
-          </button>
-          <button type="button" className="icon-button" onClick={actions.frameSelection} title="Frame selection (F)">
-            <Icon name="frame" />
-          </button>
-        </div>
-
-        <div className="tool-group snap-group">
+        <div className="tool-group snap-group" title="Snapping for the 3D move, rotate and scale tools">
           <button
             type="button"
             className={`icon-button ${settings.snapEnabled ? 'is-active' : ''}`}
             aria-pressed={settings.snapEnabled}
             onClick={() => actions.store.updateSettings({ snapEnabled: !settings.snapEnabled })}
-            title="Snap to grid"
+            title="Snap 3D moves to the grid"
           >
             <Icon name="snap" />
           </button>
-          <label className="compact-select" title="Grid size and move snap">
-            <span className="visually-hidden">Grid size</span>
-            <select
-              value={settings.gridSize}
-              onChange={(event) => actions.store.updateSettings({ gridSize: Number(event.target.value) })}
-            >
+          <label className="compact-select" title="3D grid size and move snap">
+            <span className="visually-hidden">3D grid size</span>
+            <select value={settings.gridSize} onChange={(event) => actions.store.updateSettings({ gridSize: Number(event.target.value) })}>
               {GRID_PRESETS.map((preset) => (
                 <option key={preset.size} value={preset.size}>
                   {preset.label}
@@ -153,11 +128,24 @@ export function TopBar() {
       <div className="project-title" title={project.path ?? 'Not saved yet'}>
         <span className="project-name">{project.name}</span>
         {dirty && <span className="dirty-dot" aria-label="Unsaved changes" />}
-        <button type="button" className="text-button" onClick={() => void actions.saveProject()} disabled={!dirty && project.path !== null}>
-          <Icon name="save" size={14} />
-          Save
-        </button>
       </div>
+      <button type="button" className="text-button" onClick={() => void actions.saveProject()} disabled={!dirty && project.path !== null} title="Save (Ctrl+S)">
+        <Icon name="save" size={14} />
+        Save
+      </button>
+      <button type="button" className="text-button is-primary" onClick={() => void actions.exportGlb()} title="Export a .glb for Blender or Roblox Studio (Ctrl+E)">
+        <Icon name="export" size={14} />
+        Export
+      </button>
+      <button
+        type="button"
+        className={`icon-button ${board.sidebar ? 'is-active' : ''}`}
+        onClick={() => boardStore.set({ sidebar: !board.sidebar })}
+        aria-pressed={board.sidebar}
+        title="Scene and properties panels (Ctrl+B)"
+      >
+        <Icon name="sidebar" />
+      </button>
     </header>
   );
 }

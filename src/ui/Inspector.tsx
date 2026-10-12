@@ -6,10 +6,15 @@ import { moveVertex, type ConstructionGraph } from '../core/geometry/constructio
 import type { Transform } from '../core/math/transform';
 import type { Vec3 } from '../core/math/vec3';
 import { PROJECT_FORMAT_VERSION } from '../core/project/projectFile';
-import { HEX_COLOR, isConstructionMesh, type MeshObject, type SceneObject } from '../core/scene/types';
+import { HEX_COLOR, isConstructionMesh, isSketchMesh, meshGraphOf, type MeshObject, type MeshSource, type SceneObject } from '../core/scene/types';
+import { SKETCH_PLANES, type SketchPlane } from '../core/sketch/sketch';
 import { METERS_PER_ROBLOX_STUD } from '../core/units';
 import { Icon } from './icons';
 import { NumberField } from './NumberField';
+import { ShapeControls } from './ShapeCard';
+
+const SHAPE_NAMES = { flat: 'flat', extrude: 'extruded', revolve: 'revolved' } as const;
+const PLANE_NAMES: Record<SketchPlane, string> = { front: 'Front', side: 'Side', top: 'Top' };
 
 const AXES = ['x', 'y', 'z'] as const;
 const SWATCHES = ['#3d9fe8', '#62cbff', '#e4a23c', '#55b888', '#e0565b', '#a77be0', '#d9dee5', '#3a4350'];
@@ -31,6 +36,7 @@ function withComponent(vector: Vec3, index: number, value: number): Vec3 {
 function describeKind(object: SceneObject): string {
   if (object.kind === 'group') return 'Group';
   if (object.source.type === 'primitive') return `Parametric ${object.source.primitive}`;
+  if (object.source.type === 'sketch') return `Blueprint, ${SHAPE_NAMES[object.source.shape.mode]}${object.source.shape.mirror && object.source.shape.mode !== 'revolve' ? ' and mirrored' : ''}`;
   return 'Point-built mesh';
 }
 
@@ -55,8 +61,10 @@ function ObjectProperties({ object }: { object: SceneObject }) {
         <span className="kind-label">{describeKind(object)}</span>
       </div>
       <TransformSection object={object} />
+      {isSketchMesh(object) && <BlueprintSection object={object} />}
       {object.kind === 'mesh' && <AppearanceSection object={object} />}
       {isConstructionMesh(object) && <GeometrySection object={object} />}
+      {isSketchMesh(object) && <GeneratedGeometrySection object={object} />}
       <section className="inspector-section">
         <div className="section-actions">
           <button type="button" className="text-button" onClick={actions.duplicateSelection}>
@@ -327,6 +335,67 @@ function GeometrySection({ object }: { object: MeshObject & { source: { type: 'c
   );
 }
 
+function BlueprintSection({ object }: { object: MeshObject & { source: Extract<MeshSource, { type: 'sketch' }> } }) {
+  const actions = useActions();
+  const { sketch } = object.source;
+  return (
+    <section className="inspector-section">
+      <h3>Blueprint</h3>
+      <div className="property-row">
+        <span>Drawn on</span>
+        <div className="segmented is-small" role="radiogroup" aria-label="Drawing plane">
+          {SKETCH_PLANES.map((plane) => (
+            <button
+              key={plane}
+              type="button"
+              role="radio"
+              aria-checked={sketch.plane === plane}
+              className={sketch.plane === plane ? 'is-active' : ''}
+              onClick={() => actions.setBlueprintPlane(object.id, plane)}
+            >
+              {PLANE_NAMES[plane]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="hint">
+        {Object.keys(sketch.points).length} dots and {Object.keys(sketch.lines).length} lines. Edit the drawing on the board.
+      </p>
+      <ShapeControls blueprint={object} compact />
+    </section>
+  );
+}
+
+/** Read-only stats for a generated (blueprint) mesh. */
+function GeneratedGeometrySection({ object }: { object: MeshObject }) {
+  const graph = meshGraphOf(object);
+  const report = useMemo(() => (graph ? analyzeGraph(graph) : null), [graph]);
+  if (!report) return null;
+  return (
+    <section className="inspector-section">
+      <h3>Geometry</h3>
+      <dl className="stat-grid">
+        <div>
+          <dt>Vertices</dt>
+          <dd>{report.vertices}</dd>
+        </div>
+        <div>
+          <dt>Edges</dt>
+          <dd>{report.edges}</dd>
+        </div>
+        <div>
+          <dt>Faces</dt>
+          <dd>{report.faces}</dd>
+        </div>
+        <div>
+          <dt>Triangles</dt>
+          <dd>{report.triangles}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
 function ProjectProperties() {
   const project = useEditor((s) => s.project);
   const objectCount = useEditor((s) => Object.keys(s.scene.objects).length);
@@ -379,7 +448,7 @@ function ProjectProperties() {
           </div>
         </dl>
       </section>
-      <p className="hint">Select an object in the viewport or the scene list to edit it.</p>
+      <p className="hint">Select an object in the 3D view or the scene list to edit it. Pick a blueprint to edit its drawing on the board.</p>
     </>
   );
 }

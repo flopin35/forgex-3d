@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ConstructionGraph } from '../core/geometry/constructionGraph';
-import { buildMeshData } from '../core/geometry/meshData';
+import { buildMeshData, type MeshDataOptions } from '../core/geometry/meshData';
 import type { PrimitiveKind } from '../core/scene/types';
 
 /** Shared geometry for parametric primitives (1 m across, centred on the origin). */
@@ -30,9 +30,9 @@ export interface ConstructionBuffers {
   triangleCount: number;
 }
 
-/** Rebuilds the renderable buffers for a point-built object from its construction graph. */
-export function buildConstructionBuffers(graph: ConstructionGraph): ConstructionBuffers {
-  const data = buildMeshData(graph);
+/** Rebuilds the renderable buffers for a point-built (or blueprint) object from its construction graph. */
+export function buildConstructionBuffers(graph: ConstructionGraph, options: MeshDataOptions = {}): ConstructionBuffers {
+  const data = buildMeshData(graph, options);
   const faces = new THREE.BufferGeometry();
   faces.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
   faces.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));

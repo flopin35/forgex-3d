@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { ViewHelper } from 'three/examples/jsm/helpers/ViewHelper.js';
+import { boardStore } from '../app/boardState';
 import type { ViewportApi } from '../app/editorActions';
 import { perfStats } from '../app/perfStats';
 import type { ToolImage, ViewPreset } from '../core/automation/toolTypes';
@@ -19,21 +20,22 @@ import {
 } from '../core/math/transform';
 import { cleanVec3, equals, type Vec3 } from '../core/math/vec3';
 import type { CameraState, ProjectSettings } from '../core/project/projectFile';
-import type { Scene, SceneObject } from '../core/scene/types';
+import { meshGraphOf, type Scene, type SceneObject } from '../core/scene/types';
 import { buildConstructionBuffers, buildGrid, disposeObjectTree, PrimitiveGeometryCache } from './geometryFactory';
 
 const ACCENT = 0x38b2ff;
 const EDGE_COLOR = 0x08111d;
 const VERTEX_COLOR = new THREE.Color(0xdfe8f3);
 const VERTEX_SELECTED_COLOR = new THREE.Color(0xffb02e);
-const DEFAULT_CAMERA: CameraState = { position: [4.2, 3.4, 5.6], target: [0, 0.5, 0] };
+const DEFAULT_CAMERA: CameraState = { position: [2.7, 2.1, 3.6], target: [0, 0.75, 0] };
+const TURNTABLE_SPEED = 1.6;
 const VIEW_HELPER_SIZE = 128;
 const CLICK_TOLERANCE_PX = 4;
 const VERTEX_PICK_RADIUS_PX = 12;
 
 interface ObjectNode {
   id: string;
-  /** 'group', 'construction' or 'primitive:<kind>': a change means the node is rebuilt. */
+  /** 'group', 'construction' (point-built or blueprint) or 'primitive:<kind>': a change means the node is rebuilt. */
   sourceKey: string;
   object: THREE.Object3D;
   mesh: THREE.Mesh | null;
@@ -52,7 +54,7 @@ type DragState =
 
 function sourceKeyOf(object: SceneObject): string {
   if (object.kind === 'group') return 'group';
-  return object.source.type === 'construction' ? 'construction' : `primitive:${object.source.primitive}`;
+  return object.source.type === 'primitive' ? `primitive:${object.source.primitive}` : 'construction';
 }
 
 function readTransform(object: THREE.Object3D): Transform {
@@ -87,6 +89,7 @@ export class ViewportEngine implements ViewportApi {
   private readonly environment: THREE.WebGLRenderTarget;
   private readonly resizeObserver: ResizeObserver;
   private readonly unsubscribe: () => void;
+  private readonly unsubscribeBoard: () => void;
 
   private grid: THREE.Group | null = null;
   private lastState: EditorState | null = null;
@@ -158,6 +161,8 @@ export class ViewportEngine implements ViewportApi {
 
     this.unsubscribe = store.subscribe(this.onStoreChange);
     this.onStoreChange();
+    this.unsubscribeBoard = boardStore.subscribe(this.applyTurntable);
+    this.applyTurntable();
     this.renderer.setAnimationLoop(this.tick);
   }
 
@@ -283,6 +288,7 @@ export class ViewportEngine implements ViewportApi {
   dispose(): void {
     this.renderer.setAnimationLoop(null);
     this.unsubscribe();
+    this.unsubscribeBoard();
     this.resizeObserver.disconnect();
     this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
     this.renderer.domElement.removeEventListener('pointerup', this.onPointerUp);
@@ -363,7 +369,8 @@ export class ViewportEngine implements ViewportApi {
       marker.name = 'group-marker';
       node.object.add(marker);
     } else {
-      const isConstruction = object.source.type === 'construction';
+      // Point-built and blueprint meshes can be open surfaces, so both sides are drawn.
+      const isConstruction = object.source.type !== 'primitive';
       node.material = new THREE.MeshStandardMaterial({
         roughness: 0.55,
         metalness: 0.05,
@@ -406,14 +413,15 @@ export class ViewportEngine implements ViewportApi {
     node.object.scale.set(scale[0], scale[1], scale[2]);
     if (object.kind !== 'mesh' || !node.material) return;
     node.material.color.set(object.material.color);
-    if (object.source.type === 'construction' && object.source.graph !== node.graph) {
-      this.rebuildConstruction(node, object.source.graph);
-    }
+    // Blueprint meshes are generated (and cached) from the drawing, so an unchanged drawing keeps the same graph.
+    const graph = meshGraphOf(object);
+    if (graph && graph !== node.graph) this.rebuildConstruction(node, graph, object.source.type === 'sketch');
   }
 
-  private rebuildConstruction(node: ObjectNode, graph: ConstructionGraph): void {
+  private rebuildConstruction(node: ObjectNode, graph: ConstructionGraph, generated: boolean): void {
     const start = performance.now();
-    const buffers = buildConstructionBuffers(graph);
+    // Generated meshes hide the seams inside flat caps; point-built meshes show every edge the user made.
+    const buffers = buildConstructionBuffers(graph, { featureEdgesOnly: generated });
     node.mesh!.geometry.dispose();
     node.mesh!.geometry = buffers.faces;
     node.edges!.geometry.dispose();
@@ -462,6 +470,15 @@ export class ViewportEngine implements ViewportApi {
     this.orbit.target.set(target[0], target[1], target[2]);
     this.orbit.update();
   }
+
+  private applyTurntable = (): void => {
+    const on = boardStore.getState().turntable;
+    if (this.orbit.autoRotate === on) return;
+    this.orbit.autoRotate = on;
+    this.orbit.autoRotateSpeed = TURNTABLE_SPEED;
+    if (!on) this.saveCameraView();
+    this.requestRender();
+  };
 
   private saveCameraView = (): void => {
     const p = this.camera.position;

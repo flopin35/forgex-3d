@@ -61,6 +61,9 @@ args = ["C:\\Users\\HP\\OneDrive\\Desktop\\3D software\\mcp\\forgex-mcp.cjs"]
 | `get_status` | Mode (live or file), project, unsaved changes, grid and world conventions. Call first. |
 | `list_objects`, `get_object` | The scene tree; one object in full, including vertex, edge and face ids. |
 | `list_parts`, `add_part` | Cube, plane (point-built), sphere, cylinder, empty group. |
+| `create_blueprint` | Draw dots and lines on the front, side or top plane and make it 3D: flat, extruded (thickness) or revolved (lathe), optionally mirrored. The same blueprint the user draws on the board. |
+| `edit_blueprint` | Add, move and remove dots and lines; change the plane or shape settings. One undo step. |
+| `convert_to_points` | Turn a blueprint into a point-built mesh for vertex editing. |
 | `create_point_mesh` | Build a mesh from vertices and edges; faces come from closed loops, or give them explicitly. |
 | `edit_point_mesh` | Add, move and remove vertices, edges and faces; fill loops; recalculate normals. One undo step. |
 | `check_geometry` | Report problems against the geometry invariants. |

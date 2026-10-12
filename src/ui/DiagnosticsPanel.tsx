@@ -6,7 +6,7 @@ import { Icon, type IconName } from './icons';
 const LEVEL_ICON: Record<MessageLevel, IconName> = { info: 'info', success: 'check', warning: 'warning', error: 'error' };
 
 function formatTime(time: number): string {
-  return new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 }
 
 export function DiagnosticsPanel() {
@@ -14,7 +14,8 @@ export function DiagnosticsPanel() {
   const messages = useEditor((s) => s.messages);
   const history = useEditor((s) => s.history);
   const [tab, setTab] = useState<'messages' | 'history'>('messages');
-  const [open, setOpen] = useState(true);
+  // Short screens start with the panel folded so the board and 3D view get the room.
+  const [open, setOpen] = useState(() => typeof window === 'undefined' || window.innerHeight >= 860);
   const listRef = useRef<HTMLDivElement>(null);
   const problems = messages.filter((m) => m.level === 'error' || m.level === 'warning').length;
 
@@ -34,6 +35,12 @@ export function DiagnosticsPanel() {
           History
           <span className="badge">{history.past.length}</span>
         </button>
+        {!open && messages.length > 0 && (
+          <button type="button" className={`diagnostics-latest message--${messages[messages.length - 1].level}`} onClick={() => { setTab('messages'); setOpen(true); }}>
+            <Icon name={LEVEL_ICON[messages[messages.length - 1].level]} size={13} className="message-icon" />
+            <span>{messages[messages.length - 1].text}</span>
+          </button>
+        )}
         <span className="diagnostics-spacer" />
         {tab === 'messages' && open && messages.length > 0 && (
           <button type="button" className="text-button" onClick={() => actions.store.clearMessages()}>

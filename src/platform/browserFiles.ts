@@ -1,6 +1,17 @@
 import { fileNameFromPath } from '../core/project/paths';
 import type { PlatformFiles } from './files';
 
+function download(blob: Blob, name: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 /**
  * Used when the editor runs in a normal browser (npm run dev without Tauri).
  * Opening uses a file picker; saving downloads the .forgex file.
@@ -33,14 +44,15 @@ export function createBrowserFiles(): PlatformFiles {
     },
 
     async writeProjectFile(path, contents) {
-      const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileNameFromPath(path);
-      document.body.append(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      download(new Blob([contents], { type: 'application/json' }), fileNameFromPath(path));
+    },
+
+    async chooseExportPath(suggestedName) {
+      return suggestedName;
+    },
+
+    async writeExportFile(path, bytes) {
+      download(new Blob([bytes], { type: 'model/gltf-binary' }), fileNameFromPath(path));
     },
 
     async confirm(title, message) {

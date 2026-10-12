@@ -6,6 +6,7 @@ import {
   RenameObjectCommand,
   SetColorCommand,
   SetGraphCommand,
+  SetSourceCommand,
   SetTransformCommand,
   SetVisibilityCommand,
 } from '../commands/sceneCommands';
@@ -27,9 +28,26 @@ import { orientFaces } from '../geometry/orientation';
 import { createObjectId } from '../ids';
 import { cleanTransform, decomposeMatrix, identityTransform, type Transform } from '../math/transform';
 import { add, cleanVec3, type Vec3 } from '../math/vec3';
-import { PARTS, createPartObject, getPart, type PartId } from '../scene/parts';
+import { BLUEPRINT_COLORS, PARTS, createBlueprintObject, createPartObject, getPart, type PartId } from '../scene/parts';
 import { cloneSubtree, indexInParent, isSelfOrAncestor, uniqueName, worldMatrix } from '../scene/scene';
-import { isConstructionMesh, type MeshObject, type Scene, type SceneObject } from '../scene/types';
+import { isConstructionMesh, isSketchMesh, meshGraphOf, type MeshObject, type Scene, type SceneObject } from '../scene/types';
+import { generateShape } from '../sketch/generate';
+import {
+  addLine as addSketchLine,
+  addPoint as addSketchPoint,
+  clampShape,
+  createSketch,
+  DEFAULT_SHAPE,
+  movePoint as moveSketchPoint,
+  removeLine as removeSketchLine,
+  removePoint as removeSketchPoint,
+  setPlane,
+  SHAPE_MODES,
+  SketchError,
+  SKETCH_PLANES,
+  type ShapeSettings,
+  type Sketch,
+} from '../sketch/sketch';
 import { METERS_PER_ROBLOX_STUD } from '../units';
 import {
   asArgs,
@@ -116,14 +134,49 @@ export function resolveObject(scene: Scene, ref: unknown, label = 'object'): Sce
 
 function resolveConstruction(scene: Scene, ref: unknown): ConstructionMesh {
   const object = resolveObject(scene, ref);
+  if (isSketchMesh(object)) {
+    throw new ToolError(`${object.name} is a blueprint: change it with edit_blueprint, or call convert_to_points first to edit its 3D points directly.`);
+  }
   if (!isConstructionMesh(object)) {
     throw new ToolError(`${object.name} is not point-built. Only objects made with create_point_mesh, Cube or Plane have editable points.`);
   }
   return object;
 }
 
+type SketchMesh = MeshObject & { source: { type: 'sketch'; sketch: Sketch; shape: ShapeSettings } };
+
+function resolveBlueprint(scene: Scene, ref: unknown): SketchMesh {
+  const object = resolveObject(scene, ref);
+  if (!isSketchMesh(object)) throw new ToolError(`${object.name} is not a blueprint. Blueprints are made with create_blueprint or by drawing on the board.`);
+  return object;
+}
+
+function readShape(raw: unknown, base: ShapeSettings): ShapeSettings {
+  if (raw === undefined || raw === null) return base;
+  if (typeof raw !== 'object' || Array.isArray(raw)) throw new ToolError('shape must be an object such as { "mode": "extrude", "depth": 0.2 }.');
+  const shapeArgs = raw as Args;
+  return clampShape({
+    mode: optEnum(shapeArgs, 'mode', SHAPE_MODES) ?? base.mode,
+    depth: (shapeArgs.depth === undefined ? base.depth : Number(shapeArgs.depth)),
+    segments: (shapeArgs.segments === undefined ? base.segments : Number(shapeArgs.segments)),
+    mirror: optBool(shapeArgs, 'mirror') ?? base.mirror,
+  });
+}
+
+function blueprintSummary(object: SketchMesh): Record<string, unknown> {
+  const { sketch, shape } = object.source;
+  const generated = generateShape(sketch, shape);
+  return {
+    plane: sketch.plane,
+    shape,
+    filledAreas: generated.regions,
+    geometry: reportSummary(analyzeGraph(generated.graph)),
+  };
+}
+
 function typeOf(object: SceneObject): string {
   if (object.kind === 'group') return 'group';
+  if (object.source.type === 'sketch') return 'blueprint';
   return object.source.type === 'construction' ? 'point-built' : object.source.primitive;
 }
 
@@ -284,6 +337,12 @@ const TOOLS: ToolDefinition[] = [
         children: object.childIds,
         worldPosition: roundVec(decomposeMatrix(worldMatrix(scene, object.id)).position),
       };
+      if (isSketchMesh(object)) {
+        Object.assign(details, blueprintSummary(object));
+        const { sketch } = object.source;
+        details.points = Object.values(sketch.points).slice(0, MAX_LISTED_ELEMENTS).map((p) => ({ id: p.id, x: round(p.x, 6), y: round(p.y, 6) }));
+        details.lines = Object.values(sketch.lines).slice(0, MAX_LISTED_ELEMENTS).map((l) => ({ id: l.id, a: l.a, b: l.b }));
+      }
       if (isConstructionMesh(object)) {
         const graph = object.source.graph;
         details.geometry = reportSummary(analyzeGraph(graph));
@@ -551,19 +610,231 @@ const TOOLS: ToolDefinition[] = [
     name: 'check_geometry',
     title: 'Check geometry',
     description:
-      'Checks point-built objects against the geometry invariants: loose vertices, open boundaries, non-manifold edges, bent or zero-area faces, and inconsistent normals. Checks every point-built object when none is named.',
+      'Checks point-built and blueprint objects against the geometry invariants: loose vertices, open boundaries, non-manifold edges, bent or zero-area faces, and inconsistent normals. Checks every such object when none is named.',
     inputSchema: { type: 'object', properties: { object: objectRef('Optional object id or name') }, additionalProperties: false },
     annotations: readOnly,
     run(args, ctx) {
       const scene = sceneOf(ctx);
-      const targets: ConstructionMesh[] =
+      const targets: SceneObject[] =
         args.object !== undefined && args.object !== null
-          ? [resolveConstruction(scene, args.object)]
-          : Object.values(scene.objects).filter(isConstructionMesh);
-      if (targets.length === 0) return result('There are no point-built objects to check.');
-      const reports = targets.map((o) => ({ id: o.id, name: o.name, ...reportSummary(analyzeGraph(o.source.graph)) }));
+          ? [resolveObject(scene, args.object)]
+          : Object.values(scene.objects).filter((o) => meshGraphOf(o) !== null);
+      const checkable = targets.filter((o) => meshGraphOf(o) !== null);
+      if (checkable.length === 0) return result('There are no point-built or blueprint objects to check.');
+      const reports = checkable.map((o) => ({ id: o.id, name: o.name, ...reportSummary(analyzeGraph(meshGraphOf(o)!)) }));
       const problems = reports.reduce((n, r) => n + r.problems.length, 0);
       return result(problems === 0 ? 'No geometry problems found.' : `${problems} geometry problem${problems === 1 ? '' : 's'} found.`, reports);
+    },
+  },
+  {
+    name: 'create_blueprint',
+    title: 'Draw a blueprint',
+    description:
+      'Draws a 2D outline of dots and lines on a plane (front, side or top) and turns it into a 3D object, the same way the user draws on the FORGEX board. ' +
+      'Closed loops are filled; a loop inside another becomes a hole. shape.mode: "extrude" (default, gives the outline a thickness of shape.depth metres), ' +
+      '"flat" (a panel), or "revolve" (spins the lines around the vertical axis x = 0 like a lathe, for wheels, bottles and vases: draw only the right half, x >= 0). ' +
+      'shape.mirror copies the drawing across x = 0, so you can draw half of a symmetric object. Without lines or loops, the points are joined in order into one closed outline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        plane: {
+          type: 'string',
+          enum: [...SKETCH_PLANES],
+          description:
+            'front: x right (+X), y up (+Y), thickness along Z. side: seen from the right, x towards the back (-Z), y up, thickness along X. ' +
+            'top: seen from above, x right (+X), y towards the back (-Z); extrusions grow upwards from the ground like walls. Default front.',
+        },
+        points: {
+          type: 'array',
+          items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+          minItems: 1,
+          description: 'Dot positions [x, y] in metres on the plane',
+        },
+        lines: { type: 'array', items: { type: 'array', items: { type: 'integer', minimum: 0 }, minItems: 2, maxItems: 2 }, description: 'Pairs of point indices to join' },
+        loops: { type: 'array', items: { type: 'array', items: { type: 'integer', minimum: 0 }, minItems: 3 }, description: 'Closed outlines as lists of point indices' },
+        closed: { type: 'boolean', description: 'When no lines or loops are given: close the outline (default true)' },
+        shape: {
+          type: 'object',
+          properties: {
+            mode: { type: 'string', enum: [...SHAPE_MODES] },
+            depth: { type: 'number', minimum: 0, description: 'Extrusion thickness in metres (default 0.2)' },
+            segments: { type: 'integer', minimum: 3, maximum: 256, description: 'Steps around the axis when revolving (default 32)' },
+            mirror: { type: 'boolean' },
+          },
+          additionalProperties: false,
+        },
+        ...transformProps,
+        color,
+        parent: objectRef('Optional parent object id or name'),
+      },
+      required: ['name', 'points'],
+      additionalProperties: false,
+    },
+    annotations: edit,
+    run(args, ctx) {
+      const scene = sceneOf(ctx);
+      const plane = optEnum(args, 'plane', SKETCH_PLANES) ?? 'front';
+      const rawPoints = optArray(args, 'points', MAX_VERTICES) ?? [];
+      if (rawPoints.length === 0) throw new ToolError('points needs at least one [x, y] position.');
+      let sketch = createSketch(plane);
+      const ids: string[] = [];
+      rawPoints.forEach((item, i) => {
+        if (!Array.isArray(item) || item.length !== 2 || !item.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+          throw new ToolError(`points[${i}] must be [x, y] with two finite numbers.`);
+        }
+        const added = addSketchPoint(sketch, item[0], item[1]);
+        sketch = added.sketch;
+        ids.push(added.pointId);
+      });
+      const join = (a: unknown, b: unknown, label: string) => {
+        const ia = toIndex(a, ids.length, label);
+        const ib = toIndex(b, ids.length, label);
+        if (ia === ib) throw new ToolError(`${label} joins point ${ia} to itself.`);
+        sketch = addSketchLine(sketch, ids[ia], ids[ib]).sketch;
+      };
+      const lines = optArray(args, 'lines', MAX_VERTICES * 4);
+      const loops = optArray(args, 'loops', MAX_VERTICES);
+      lines?.forEach((line, i) => {
+        if (!Array.isArray(line) || line.length !== 2) throw new ToolError(`lines[${i}] must be a pair of point indices.`);
+        join(line[0], line[1], `lines[${i}]`);
+      });
+      loops?.forEach((loop, i) => {
+        if (!Array.isArray(loop) || loop.length < 3) throw new ToolError(`loops[${i}] must list at least 3 point indices.`);
+        loop.forEach((index, k) => join(index, loop[(k + 1) % loop.length], `loops[${i}]`));
+      });
+      if (!lines && !loops && ids.length >= 2) {
+        for (let i = 0; i + 1 < ids.length; i++) sketch = addSketchLine(sketch, ids[i], ids[i + 1]).sketch;
+        if ((optBool(args, 'closed') ?? true) && ids.length >= 3) sketch = addSketchLine(sketch, ids[ids.length - 1], ids[0]).sketch;
+      }
+      const shape = readShape(args.shape, DEFAULT_SHAPE);
+      const base = createBlueprintObject({
+        name: uniqueName(scene, reqString(args, 'name')),
+        sketch,
+        shape,
+        color: optColor(args, 'color') ?? BLUEPRINT_COLORS[Object.keys(scene.objects).length % BLUEPRINT_COLORS.length],
+      });
+      const object: MeshObject = { ...base, transform: applyTransformArgs(base.transform, args) };
+      apply(ctx, new AddObjectsCommand([object], parentFromArgs(scene, args), undefined, `AI: draw ${object.name}`));
+      return result(`Drew ${object.name} (${object.id}) with ${ids.length} dots.`, {
+        id: object.id,
+        pointIds: ids,
+        ...blueprintSummary(object as SketchMesh),
+      });
+    },
+  },
+  {
+    name: 'edit_blueprint',
+    title: 'Edit a blueprint',
+    description:
+      'Changes a blueprint drawing and how it becomes 3D, in one undoable step. Steps run in order: remove lines, remove points (their lines go too), add points, move points, add lines, then plane and shape. ' +
+      'Refer to existing dots by id (p3) and to dots added in this call by their index in add_points. Coordinates are [x, y] metres on the drawing plane.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        object: objectRef(),
+        remove_lines: { type: 'array', items: { type: 'string' } },
+        remove_points: { type: 'array', items: { type: 'string' } },
+        add_points: { type: 'array', items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 } },
+        move_points: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              point: { anyOf: [{ type: 'string' }, { type: 'integer', minimum: 0 }] },
+              position: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+              offset: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+            },
+            required: ['point'],
+          },
+        },
+        add_lines: {
+          type: 'array',
+          items: { type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'integer', minimum: 0 }] }, minItems: 2, maxItems: 2 },
+        },
+        plane: { type: 'string', enum: [...SKETCH_PLANES] },
+        shape: {
+          type: 'object',
+          properties: {
+            mode: { type: 'string', enum: [...SHAPE_MODES] },
+            depth: { type: 'number', minimum: 0 },
+            segments: { type: 'integer', minimum: 3, maximum: 256 },
+            mirror: { type: 'boolean' },
+          },
+          additionalProperties: false,
+        },
+      },
+      required: ['object'],
+      additionalProperties: false,
+    },
+    annotations: edit,
+    run(args, ctx) {
+      const object = resolveBlueprint(sceneOf(ctx), args.object);
+      const before = object.source;
+      let sketch = before.sketch;
+      const guard = <T>(label: string, fn: () => T): T => {
+        try {
+          return fn();
+        } catch (error) {
+          if (error instanceof SketchError) throw new ToolError(`${label}: ${error.message}`);
+          throw error;
+        }
+      };
+      for (const id of (optArray(args, 'remove_lines', MAX_VERTICES) ?? []) as unknown[]) sketch = guard('remove_lines', () => removeSketchLine(sketch, String(id)));
+      for (const id of (optArray(args, 'remove_points', MAX_VERTICES) ?? []) as unknown[]) sketch = guard('remove_points', () => removeSketchPoint(sketch, String(id)));
+      const newIds: string[] = [];
+      (optArray(args, 'add_points', MAX_VERTICES) ?? []).forEach((item, i) => {
+        if (!Array.isArray(item) || item.length !== 2) throw new ToolError(`add_points[${i}] must be [x, y].`);
+        const added = guard(`add_points[${i}]`, () => addSketchPoint(sketch, Number(item[0]), Number(item[1])));
+        sketch = added.sketch;
+        newIds.push(added.pointId);
+      });
+      const ref = (value: unknown, label: string): string => {
+        if (typeof value === 'string') {
+          if (!sketch.points[value]) throw new ToolError(`${label}: dot ${value} does not exist. Use get_object to see dot ids.`);
+          return value;
+        }
+        return newIds[toIndex(value, newIds.length, label)];
+      };
+      (optArray(args, 'move_points', MAX_VERTICES) ?? []).forEach((item, i) => {
+        if (typeof item !== 'object' || item === null) throw new ToolError(`move_points[${i}] must be { point, position } or { point, offset }.`);
+        const move = item as Args;
+        const id = ref(move.point, `move_points[${i}].point`);
+        const position = Array.isArray(move.position) ? move.position.map(Number) : null;
+        const offset = Array.isArray(move.offset) ? move.offset.map(Number) : null;
+        const current = sketch.points[id];
+        const target = position ?? (offset ? [current.x + offset[0], current.y + offset[1]] : null);
+        if (!target) throw new ToolError(`move_points[${i}] needs position or offset.`);
+        sketch = guard(`move_points[${i}]`, () => moveSketchPoint(sketch, id, target[0], target[1]));
+      });
+      (optArray(args, 'add_lines', MAX_VERTICES * 4) ?? []).forEach((line, i) => {
+        if (!Array.isArray(line) || line.length !== 2) throw new ToolError(`add_lines[${i}] must be a pair of dots.`);
+        const a = ref(line[0], `add_lines[${i}][0]`);
+        const b = ref(line[1], `add_lines[${i}][1]`);
+        sketch = guard(`add_lines[${i}]`, () => addSketchLine(sketch, a, b).sketch);
+      });
+      const plane = optEnum(args, 'plane', SKETCH_PLANES);
+      if (plane) sketch = setPlane(sketch, plane);
+      const shape = readShape(args.shape, before.shape);
+      if (sketch === before.sketch && JSON.stringify(shape) === JSON.stringify(before.shape)) return result(`Nothing changed on ${object.name}.`);
+      const after = { type: 'sketch' as const, sketch, shape };
+      apply(ctx, new SetSourceCommand(object.id, before, after, `AI: edit blueprint ${object.name}`));
+      return result(`Edited ${object.name}.`, { addedPointIds: newIds, ...blueprintSummary({ ...object, source: after }) });
+    },
+  },
+  {
+    name: 'convert_to_points',
+    title: 'Convert blueprint to points',
+    description:
+      'Turns a blueprint into a point-built object with its current 3D shape, so individual vertices can be edited with edit_point_mesh. The drawing is no longer used afterwards (undo restores it).',
+    inputSchema: { type: 'object', properties: { object: objectRef() }, required: ['object'], additionalProperties: false },
+    annotations: edit,
+    run(args, ctx) {
+      const object = resolveBlueprint(sceneOf(ctx), args.object);
+      const graph = generateShape(object.source.sketch, object.source.shape).graph;
+      apply(ctx, new SetSourceCommand(object.id, object.source, { type: 'construction', graph }, `AI: convert ${object.name} to points`));
+      const counts = analyzeGraph(graph);
+      return result(`${object.name} is now point-built with ${counts.vertices} vertices and ${counts.faces} faces.`);
     },
   },
   {

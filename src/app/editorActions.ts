@@ -6,6 +6,7 @@ import {
   RenameObjectCommand,
   SetColorCommand,
   SetGraphCommand,
+  SetSourceCommand,
   SetTransformCommand,
   SetVisibilityCommand,
 } from '../core/commands/sceneCommands';
@@ -21,10 +22,15 @@ import { cleanVec3, equals, snapScalar, type Vec3 } from '../core/math/vec3';
 import { createDefaultDocument, createEmptyDocument } from '../core/project/defaultDocument';
 import { ensureProjectExtension, fileNameFromPath, projectNameFromPath } from '../core/project/paths';
 import { parseProject, serializeProject } from '../core/project/projectFile';
-import { createPartObject, getPart, type PartId } from '../core/scene/parts';
+import { BLUEPRINT_COLORS, createBlueprintObject, createPartObject, getPart, type PartId } from '../core/scene/parts';
 import { cloneSubtree, indexInParent, planDrop, uniqueName, type DropPosition } from '../core/scene/scene';
-import { isConstructionMesh } from '../core/scene/types';
+import { isConstructionMesh, isSketchMesh, meshGraphOf, type MeshObject, type MeshSource } from '../core/scene/types';
+import { clampShape, removeItems, setPlane, type ShapeSettings, type Sketch, type SketchPlane } from '../core/sketch/sketch';
 import type { PlatformFiles } from '../platform/files';
+import { boardStore } from './boardState';
+
+/** A selected blueprint: a mesh whose shape comes from a drawing on the board. */
+export type BlueprintObject = MeshObject & { source: { type: 'sketch'; sketch: Sketch; shape: ShapeSettings } };
 
 /** What the editor needs from the 3D viewport. */
 export interface ViewportApi {
@@ -37,8 +43,8 @@ export interface ViewportApi {
   capture(options: { view: ViewPreset; frame: boolean; width: number }): ToolImage;
 }
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
+function plural(n: number, word: string, many = `${word}s`): string {
+  return `${n} ${n === 1 ? word : many}`;
 }
 
 /**
@@ -71,8 +77,9 @@ export class EditorActions {
 
   newProject = async (): Promise<void> => {
     if (!(await this.confirmDiscard('Start a new project'))) return;
-    this.store.loadDocument(createDefaultDocument(), 'Untitled', null);
-    this.store.log('info', 'Started a new project.');
+    this.store.loadDocument(createEmptyDocument(), 'Untitled', null);
+    boardStore.set({ tool: 'draw', chainFrom: null, selectedPoints: [], selectedLines: [] });
+    this.store.log('info', 'Started a new project. Click on the board to place your first dot.');
   };
 
   openProject = async (): Promise<void> => {
@@ -262,6 +269,166 @@ export class EditorActions {
     else this.store.previewTransform(id, before);
   };
 
+  // -- Blueprints (the drawing board) ----------------------------------------------
+
+  /** The selected object when it is a blueprint, else null. */
+  activeBlueprint = (): BlueprintObject | null => {
+    const { selectedId, scene } = this.store.getState();
+    const object = selectedId ? scene.objects[selectedId] : undefined;
+    return isSketchMesh(object) ? object : null;
+  };
+
+  /** Adds a blueprint holding `sketch` (drawn on its plane) and selects it. Returns its id. */
+  createBlueprint = (sketch: Sketch, label = 'Start a blueprint', shape?: Partial<ShapeSettings>): string | null => {
+    const { scene } = this.store.getState();
+    const count = Object.values(scene.objects).filter((object) => isSketchMesh(object)).length;
+    const object = createBlueprintObject({
+      name: uniqueName(scene, 'Blueprint'),
+      sketch,
+      shape,
+      color: BLUEPRINT_COLORS[count % BLUEPRINT_COLORS.length],
+    });
+    return this.run(new AddObjectsCommand([object], null, undefined, label)) ? object.id : null;
+  };
+
+  /** Deselects so the next click on the board starts a new blueprint on `plane`. */
+  startNewBlueprint = (plane?: SketchPlane): void => {
+    this.store.select(null);
+    boardStore.clearSelection();
+    boardStore.set({ tool: 'draw', ...(plane ? { newPlane: plane } : {}) });
+  };
+
+  /**
+   * Commits a new drawing for a blueprint. Pass `before` when the drawing was previewed
+   * live (dragging dots), so undo returns to where the drag started.
+   */
+  editBlueprint = (id: string, sketch: Sketch, label: string, before?: MeshSource): boolean => {
+    const object = this.store.getState().scene.objects[id];
+    if (!isSketchMesh(object)) return false;
+    const from = before ?? object.source;
+    if (from.type !== 'sketch') return false;
+    if (from.sketch === sketch) {
+      if (before) this.store.previewSource(id, before);
+      return false;
+    }
+    return this.run(new SetSourceCommand(id, from, { type: 'sketch', sketch, shape: from.shape }, label));
+  };
+
+  /** Changes how a drawing becomes 3D (flat, extrude, revolve, depth, segments, mirror). */
+  setBlueprintShape = (id: string, patch: Partial<ShapeSettings>, before?: MeshSource, label?: string): boolean => {
+    const object = this.store.getState().scene.objects[id];
+    if (!isSketchMesh(object)) return false;
+    const from = before ?? object.source;
+    if (from.type !== 'sketch') return false;
+    const shape = clampShape({ ...from.shape, ...patch });
+    const same = (Object.keys(shape) as (keyof ShapeSettings)[]).every((key) => shape[key] === from.shape[key]);
+    if (same) {
+      if (before) this.store.previewSource(id, before);
+      return false;
+    }
+    return this.run(new SetSourceCommand(id, from, { type: 'sketch', sketch: from.sketch, shape }, label ?? `Shape ${object.name}`));
+  };
+
+  /** Live preview of shape settings (sliders); setBlueprintShape commits. */
+  previewBlueprintShape = (id: string, patch: Partial<ShapeSettings>, base: MeshSource): void => {
+    if (base.type !== 'sketch') return;
+    this.store.previewSource(id, { ...base, shape: clampShape({ ...base.shape, ...patch }) });
+  };
+
+  setBlueprintPlane = (id: string, plane: SketchPlane): void => {
+    const object = this.store.getState().scene.objects[id];
+    if (!isSketchMesh(object) || object.source.sketch.plane === plane) return;
+    this.editBlueprint(id, setPlane(object.source.sketch, plane), `Draw ${object.name} on the ${plane} plane`);
+  };
+
+  toggleMirror = (): void => {
+    const blueprint = this.activeBlueprint();
+    if (!blueprint) {
+      this.store.log('info', 'Select a blueprint to mirror its drawing.');
+      return;
+    }
+    const mirror = !blueprint.source.shape.mirror;
+    this.setBlueprintShape(blueprint.id, { mirror }, undefined, `${mirror ? 'Mirror' : 'Unmirror'} ${blueprint.name}`);
+  };
+
+  /** Deletes the dots and lines picked on the board. Returns false when nothing was picked. */
+  deleteBoardSelection = (): boolean => {
+    const blueprint = this.activeBlueprint();
+    const { selectedPoints, selectedLines } = boardStore.getState();
+    if (!blueprint || (selectedPoints.length === 0 && selectedLines.length === 0)) return false;
+    const sketch = removeItems(blueprint.source.sketch, selectedPoints, selectedLines);
+    boardStore.clearSelection();
+    const parts = [
+      selectedPoints.length ? plural(selectedPoints.length, 'dot') : '',
+      selectedLines.length ? plural(selectedLines.length, 'line') : '',
+    ].filter(Boolean);
+    this.editBlueprint(blueprint.id, sketch, `Delete ${parts.join(' and ')}`);
+    return true;
+  };
+
+  /** Backspace while drawing: removes the dot just placed and continues from the one before it. */
+  stepBackChain = (): boolean => {
+    const blueprint = this.activeBlueprint();
+    const { chainFrom, tool } = boardStore.getState();
+    if (!blueprint || tool !== 'draw' || !chainFrom || !blueprint.source.sketch.points[chainFrom]) return false;
+    const sketch = blueprint.source.sketch;
+    const neighbours = Object.values(sketch.lines)
+      .filter((line) => line.a === chainFrom || line.b === chainFrom)
+      .map((line) => (line.a === chainFrom ? line.b : line.a));
+    this.editBlueprint(blueprint.id, removeItems(sketch, [chainFrom], []), `Remove dot ${chainFrom}`);
+    boardStore.set({ chainFrom: neighbours.length === 1 ? neighbours[0] : null });
+    return true;
+  };
+
+  /** Delete key: picked dots and lines first, otherwise the selected object. */
+  deleteContextual = (): void => {
+    if (!this.deleteBoardSelection()) this.deleteSelection();
+  };
+
+  /** Turns a blueprint into a point-built mesh so its vertices can be edited one by one. */
+  convertToPoints = (id?: string): void => {
+    const object = id ? this.store.getState().scene.objects[id] : this.activeBlueprint();
+    if (!isSketchMesh(object)) return;
+    const graph = meshGraphOf(object);
+    if (!graph) return;
+    if (this.run(new SetSourceCommand(object.id, object.source, { type: 'construction', graph }, `Convert ${object.name} to points`))) {
+      boardStore.clearSelection();
+      this.store.log('info', `${object.name} is now point-built: press Tab to edit its vertices. Undo turns it back into a blueprint.`);
+    }
+  };
+
+  toggleTurntable = (): void => {
+    boardStore.set({ turntable: !boardStore.getState().turntable });
+  };
+
+  /** Exports the visible scene as a .glb for Blender or Roblox Studio. */
+  exportGlb = async (): Promise<void> => {
+    const { scene, project } = this.store.getState();
+    let path: string | null;
+    try {
+      path = await this.files.chooseExportPath(`${project.name || 'Untitled'}.glb`);
+    } catch (error) {
+      this.store.log('error', 'The export dialog could not open.', String(error));
+      return;
+    }
+    if (!path) return;
+    if (!path.toLowerCase().endsWith('.glb')) path = `${path}.glb`;
+    try {
+      const { exportSceneToGlb } = await import('../viewport/exportGlb');
+      const result = await exportSceneToGlb(scene, project.name || 'FORGEX model');
+      await this.files.writeExportFile(path, result.bytes);
+      const size = result.bytes.byteLength < 1024 * 1024 ? `${Math.max(1, Math.round(result.bytes.byteLength / 1024))} KB` : `${(result.bytes.byteLength / (1024 * 1024)).toFixed(1)} MB`;
+      const where = this.files.kind === 'desktop' ? path : `${fileNameFromPath(path)} (downloaded)`;
+      this.store.log(
+        'success',
+        `Exported ${plural(result.meshes, 'mesh', 'meshes')} (${result.triangles.toLocaleString()} triangles, ${size}) to ${where}.`,
+        'Blender: File > Import > glTF 2.0 (.glb). Roblox Studio: Avatar or Home tab > Import 3D. Units are metres; Roblox scales 1 m to about 3.57 studs.',
+      );
+    } catch (error) {
+      this.store.log('error', 'Export failed. Nothing was written.', error instanceof Error ? error.message : String(error));
+    }
+  };
+
   // -- Points mode --------------------------------------------------------------
 
   togglePointsMode = (): void => {
@@ -340,9 +507,18 @@ export class EditorActions {
     this.viewport?.frameSelection();
   };
 
-  /** Esc: cancel a drag first; otherwise step out of points mode, then clear the selection. */
+  /** Esc: cancel a drag, finish a line chain, clear picked dots, step out of points mode, then deselect. */
   escape = (): void => {
     if (this.viewport?.cancelActiveDrag()) return;
+    const board = boardStore.getState();
+    if (board.chainFrom) {
+      boardStore.set({ chainFrom: null });
+      return;
+    }
+    if (boardStore.hasSelection) {
+      boardStore.clearSelection();
+      return;
+    }
     const { editMode, selectedVertexId } = this.store.getState();
     if (editMode === 'points') {
       if (selectedVertexId) this.store.selectVertex(null);

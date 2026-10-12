@@ -5,7 +5,7 @@ import type { Transform } from '../math/transform';
 import { createDefaultDocument } from '../project/defaultDocument';
 import type { CameraState, ProjectDocument, ProjectSettings } from '../project/projectFile';
 import { setObjectTransform, updateObject } from '../scene/scene';
-import { isConstructionMesh, type Scene } from '../scene/types';
+import { isConstructionMesh, type MeshSource, type Scene } from '../scene/types';
 
 export type ToolMode = 'select' | 'translate' | 'rotate' | 'scale';
 export type EditMode = 'object' | 'points';
@@ -125,7 +125,7 @@ export class EditorStore {
       selectedId: null,
       editMode: 'object',
       selectedVertexId: null,
-      tool: this.state?.tool ?? 'translate',
+      tool: this.state?.tool ?? 'select',
       settings: { ...document.settings },
       project: { name, path, savedRevision: this.history.revision, settingsDirty: false },
       history: this.summarizeHistory(),
@@ -207,6 +207,13 @@ export class EditorStore {
     this.commit({ scene: setObjectTransform(this.state.scene, id, transform) });
   }
 
+  /** Live preview of a mesh source (e.g. dragging a dot on the board); a command commits the final value. */
+  previewSource(id: string, source: MeshSource): void {
+    const object = this.state.scene.objects[id];
+    if (object?.kind !== 'mesh') return;
+    this.commit({ scene: updateObject(this.state.scene, id, () => ({ ...object, source })) });
+  }
+
   previewColor(id: string, color: string): void {
     const object = this.state.scene.objects[id];
     if (object?.kind !== 'mesh') return;
@@ -238,7 +245,7 @@ export class EditorStore {
     if (mode === 'points') {
       const object = this.state.selectedId ? this.state.scene.objects[this.state.selectedId] : undefined;
       if (!isConstructionMesh(object)) {
-        this.log('warning', 'Select a point-built object (a Cube or Plane) to edit its vertices.');
+        this.log('warning', 'Select a point-built object (a Cube or Plane) to edit its vertices. Blueprints are edited on the board, or use Convert to points.');
         return false;
       }
     }

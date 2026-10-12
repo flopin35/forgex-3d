@@ -10,7 +10,7 @@ import {
   setObjectTransform,
   updateObject,
 } from '../scene/scene';
-import type { MeshObject, Scene, SceneObject } from '../scene/types';
+import type { MeshObject, MeshSource, Scene, SceneObject } from '../scene/types';
 import type { Command } from './command';
 
 /** Adds an object (and any descendants it carries) to the scene. */
@@ -186,6 +186,29 @@ export class MoveObjectCommand implements Command {
     if (!this.previous) throw new SceneError('Move was never applied.');
     const moved = moveObject(scene, this.id, this.previous.parentId, this.previous.index, false);
     return setObjectTransform(moved, this.id, cloneTransform(this.previous.transform));
+  }
+}
+
+/** Replaces a mesh's whole source: blueprint edits, shape settings, or converting a blueprint to points. */
+export class SetSourceCommand implements Command {
+  constructor(
+    private readonly id: string,
+    private readonly before: MeshSource,
+    private readonly after: MeshSource,
+    readonly label: string,
+  ) {}
+
+  private write(scene: Scene, source: MeshSource): Scene {
+    const mesh = requireMesh(scene, this.id);
+    return updateObject(scene, this.id, () => ({ ...mesh, source }));
+  }
+
+  apply(scene: Scene): Scene {
+    return this.write(scene, this.after);
+  }
+
+  revert(scene: Scene): Scene {
+    return this.write(scene, this.before);
   }
 }
 

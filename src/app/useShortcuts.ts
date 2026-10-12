@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { boardStore } from './boardState';
 import type { EditorActions } from './editorActions';
 
 function isTyping(target: EventTarget | null): boolean {
@@ -23,6 +24,8 @@ export function useShortcuts(actions: EditorActions): void {
           n: () => void actions.newProject(),
           d: actions.duplicateSelection,
           g: actions.groupSelection,
+          e: () => void actions.exportGlb(),
+          b: () => boardStore.set({ sidebar: !boardStore.getState().sidebar }),
         };
         const handler = handlers[key];
         if (handler) {
@@ -50,8 +53,33 @@ export function useShortcuts(actions: EditorActions): void {
         case 'f':
           actions.frameSelection();
           break;
+        case 'd':
+          boardStore.setTool('draw');
+          break;
+        case 'v':
+          boardStore.setTool('select');
+          break;
+        case 'b':
+          boardStore.setTool('rectangle');
+          break;
+        case 'o':
+          boardStore.setTool('circle');
+          break;
+        case 'm':
+          actions.toggleMirror();
+          break;
+        case 't':
+          actions.toggleTurntable();
+          break;
+        case 'enter':
+          boardStore.set({ chainFrom: null });
+          break;
         case 'delete':
-          actions.deleteSelection();
+          actions.deleteContextual();
+          break;
+        case 'backspace':
+          // Backspace removes picked dots and lines, or steps back while drawing; never a whole object.
+          if (!actions.deleteBoardSelection() && !actions.stepBackChain()) return;
           break;
         case 'tab':
           event.preventDefault();

@@ -66,9 +66,11 @@ jobs:
         shell: pwsh
         run: |
           $dir = Join-Path $env:RUNNER_TEMP 'builds'
-          New-Item -ItemType Directory -Force $dir, "$dir/mcp-dist" | Out-Null
+          New-Item -ItemType Directory -Force $dir, "$dir/mcp-dist", "$dir/web" | Out-Null
           Copy-Item release/* $dir
           Copy-Item -Recurse mcp/dist/* "$dir/mcp-dist"
+          # The web build of the same app, for browser previews and UI checks.
+          Copy-Item -Recurse dist/* "$dir/web"
           Set-Location $dir
           git init -q -b builds
           git config user.name 'github-actions[bot]'

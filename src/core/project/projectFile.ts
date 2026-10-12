@@ -2,12 +2,13 @@ import { analyzeGraph } from '../geometry/analysis';
 import { graphFromJson, graphToJson, type ConstructionGraphJson } from '../geometry/graphJson';
 import { isFiniteNumber, isVec3, type Vec3 } from '../math/vec3';
 import type { Transform } from '../math/transform';
-import { HEX_COLOR, PRIMITIVE_KINDS, type MeshSource, type PrimitiveKind, type Scene, type SceneObject } from '../scene/types';
+import { HEX_COLOR, meshGraphOf, PRIMITIVE_KINDS, type MeshSource, type PrimitiveKind, type Scene, type SceneObject } from '../scene/types';
+import { sketchFromJson, sketchToJson, type SketchJson } from '../sketch/sketchJson';
 import { WORLD_CONVENTIONS } from '../units';
 import { APP_NAME, APP_VERSION } from '../version';
 
 export const PROJECT_FORMAT = 'forgex-project';
-export const PROJECT_FORMAT_VERSION = 1;
+export const PROJECT_FORMAT_VERSION = 2;
 export const PROJECT_EXTENSION = 'forgex';
 
 export interface ProjectSettings {
@@ -33,7 +34,8 @@ export const DEFAULT_SETTINGS: ProjectSettings = { gridSize: 0.25, snapEnabled: 
 
 type SerializedSource =
   | { type: 'primitive'; primitive: PrimitiveKind }
-  | ({ type: 'construction' } & ConstructionGraphJson);
+  | ({ type: 'construction' } & ConstructionGraphJson)
+  | ({ type: 'sketch' } & SketchJson);
 
 interface SerializedObject {
   id: string;
@@ -47,10 +49,10 @@ interface SerializedObject {
   source?: SerializedSource;
 }
 
-/** Version 1 of the file format. See docs/forgex-format.md. */
-export interface ProjectFileV1 {
+/** The current file format (version 2 added blueprint objects). See docs/forgex-format.md. */
+export interface ProjectFileV2 {
   format: typeof PROJECT_FORMAT;
-  version: 1;
+  version: 2;
   generator: string;
   savedAt: string;
   units: typeof WORLD_CONVENTIONS;
@@ -60,9 +62,14 @@ export interface ProjectFileV1 {
 }
 
 function serializeSource(source: MeshSource): SerializedSource {
-  return source.type === 'primitive'
-    ? { type: 'primitive', primitive: source.primitive }
-    : { type: 'construction', ...graphToJson(source.graph) };
+  switch (source.type) {
+    case 'primitive':
+      return { type: 'primitive', primitive: source.primitive };
+    case 'construction':
+      return { type: 'construction', ...graphToJson(source.graph) };
+    case 'sketch':
+      return { type: 'sketch', ...sketchToJson(source.sketch, source.shape) };
+  }
 }
 
 function serializeObject(object: SceneObject): SerializedObject {
@@ -100,7 +107,7 @@ function orderedObjects(scene: Scene): SceneObject[] {
 }
 
 export function serializeProject(document: ProjectDocument, now: Date = new Date()): string {
-  const file: ProjectFileV1 = {
+  const file: ProjectFileV2 = {
     format: PROJECT_FORMAT,
     version: PROJECT_FORMAT_VERSION,
     generator: `${APP_NAME} ${APP_VERSION}`,
@@ -127,7 +134,10 @@ export type Migration = (data: RawProject) => RawProject;
  * Upgrades from version N to N + 1, keyed by N. Version 1 is the first format;
  * when the format changes, add a function here and bump PROJECT_FORMAT_VERSION.
  */
-export const PROJECT_MIGRATIONS: Readonly<Record<number, Migration>> = {};
+export const PROJECT_MIGRATIONS: Readonly<Record<number, Migration>> = {
+  // Version 2 added blueprint objects ("sketch" sources). Version 1 files need no changes.
+  1: (data) => data,
+};
 
 export function migrateProjectData(
   data: RawProject,
@@ -203,7 +213,11 @@ function readSource(raw: unknown, at: string, errors: string[]): MeshSource | nu
     const graph = graphFromJson(raw, at, errors);
     return graph ? { type: 'construction', graph } : null;
   }
-  errors.push(`${at}.type must be "primitive" or "construction".`);
+  if (raw.type === 'sketch') {
+    const blueprint = sketchFromJson(raw, at, errors);
+    return blueprint ? { type: 'sketch', ...blueprint } : null;
+  }
+  errors.push(`${at}.type must be "primitive", "construction" or "sketch".`);
   return null;
 }
 
@@ -351,8 +365,9 @@ export function parseProject(text: string): ParseResult {
   }
 
   for (const object of Object.values(objects)) {
-    if (object.kind === 'mesh' && object.source.type === 'construction') {
-      for (const issue of analyzeGraph(object.source.graph).issues) {
+    const graph = meshGraphOf(object);
+    if (graph) {
+      for (const issue of analyzeGraph(graph).issues) {
         if (issue.severity !== 'info') warnings.push(`${object.name}: ${issue.message}`);
       }
     }

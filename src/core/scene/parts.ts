@@ -2,7 +2,8 @@ import { buildCubeGraph, buildPlaneGraph } from '../geometry/builders';
 import { createObjectId } from '../ids';
 import { identityTransform } from '../math/transform';
 import type { Vec3 } from '../math/vec3';
-import type { SceneObject } from './types';
+import { clampShape, createSketch, DEFAULT_SHAPE, type ShapeSettings, type Sketch, type SketchPlane } from '../sketch/sketch';
+import type { MeshObject, SceneObject } from './types';
 
 export type PartId = 'cube' | 'plane' | 'sphere' | 'cylinder' | 'group';
 
@@ -71,6 +72,34 @@ export interface CreatePartOptions {
   /** Ground position (x, z); the part's resting height is added on top. */
   groundPosition?: [number, number];
   id?: string;
+}
+
+export const BLUEPRINT_COLORS = ['#3d9fe8', '#e4a23c', '#55b888', '#e0565b', '#a77be0', '#62cbff'];
+
+/** A blueprint object: a drawing on a plane that becomes 3D through its shape settings. */
+export function createBlueprintObject(options: {
+  name: string;
+  sketch?: Sketch;
+  plane?: SketchPlane;
+  shape?: Partial<ShapeSettings>;
+  color?: string;
+  id?: string;
+}): MeshObject {
+  return {
+    id: options.id ?? createObjectId(),
+    name: options.name,
+    kind: 'mesh',
+    parentId: null,
+    childIds: [],
+    visible: true,
+    transform: identityTransform(),
+    material: { color: options.color ?? BLUEPRINT_COLORS[0] },
+    source: {
+      type: 'sketch',
+      sketch: options.sketch ?? createSketch(options.plane ?? 'front'),
+      shape: clampShape({ ...DEFAULT_SHAPE, ...options.shape }),
+    },
+  };
 }
 
 export function createPartObject(partId: PartId, options: CreatePartOptions = {}): SceneObject {

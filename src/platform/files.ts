@@ -17,6 +17,10 @@ export interface PlatformFiles {
   readProjectAt(path: string): Promise<string>;
   /** Writes safely: a failed save never replaces the existing file with partial data. */
   writeProjectFile(path: string, contents: string): Promise<void>;
+  /** Shows a save dialog for an exported model (.glb). Null when cancelled. */
+  chooseExportPath(suggestedName: string): Promise<string | null>;
+  /** Writes an exported model. In the browser preview this downloads it. */
+  writeExportFile(path: string, bytes: Uint8Array<ArrayBuffer>): Promise<void>;
   confirm(title: string, message: string): Promise<boolean>;
   setTitle(title: string): Promise<void>;
   /** Asks before closing the window while `isDirty()` is true. Returns a function that removes the guard. */

@@ -153,3 +153,52 @@ describe('automation tools', () => {
     expect(status.text).toContain('1 object');
   });
 });
+
+describe('blueprint tools', () => {
+  it('draws a mirrored sword blade outline and extrudes it into one closed solid', async () => {
+    const ctx = context();
+    const out = await runTool(
+      'create_blueprint',
+      {
+        name: 'Sword',
+        points: [[0, 1.2], [0.06, 1.05], [0.06, 0.2], [0.25, 0.15], [0.25, 0.1], [0, 0.1]],
+        closed: false,
+        shape: { mode: 'extrude', depth: 0.04, mirror: true },
+      },
+      ctx,
+    );
+    const info = details(out.text);
+    expect(info.filledAreas).toBe(1);
+    expect(info.geometry.closed).toBe(true);
+    expect(info.geometry.problems).toEqual([]);
+  });
+
+  it('revolves a profile, then edits it and converts it to points', async () => {
+    const ctx = context();
+    await runTool('create_blueprint', { name: 'Vase', points: [[0, 0], [0.3, 0], [0.4, 0.5], [0.2, 1]], closed: false, shape: { mode: 'revolve', segments: 24 } }, ctx);
+    const edited = details((await runTool('edit_blueprint', { object: 'Vase', add_points: [[0, 1]], add_lines: [['p4', 0]] }, ctx)).text);
+    expect(edited.addedPointIds).toEqual(['p5']);
+    expect(edited.geometry.closed).toBe(true);
+    const listed = details((await runTool('list_objects', {}, ctx)).text);
+    expect(listed[0].type).toBe('blueprint');
+    await runTool('convert_to_points', { object: 'Vase' }, ctx);
+    expect(details((await runTool('list_objects', {}, ctx)).text)[0].type).toBe('point-built');
+    await runTool('undo', {}, ctx);
+    expect(details((await runTool('list_objects', {}, ctx)).text)[0].type).toBe('blueprint');
+  });
+
+  it('saves blueprints in the file and reads version 1 files', async () => {
+    const ctx = context();
+    await runTool('create_blueprint', { name: 'Sign', plane: 'side', points: [[0, 0], [1, 0], [1, 0.5], [0, 0.5]], shape: { mode: 'flat' } }, ctx);
+    const text = serializeProject(ctx.store.toDocument());
+    const reopened = parseProject(text);
+    if (!reopened.ok) throw new Error(reopened.errors.join('\n'));
+    expect(reopened.document).toEqual(ctx.store.toDocument());
+
+    const v1 = JSON.parse(serializeProject(createEmptyDocument()));
+    v1.version = 1;
+    const old = parseProject(JSON.stringify(v1));
+    expect(old.ok).toBe(true);
+    if (old.ok) expect(old.migratedFrom).toBe(1);
+  });
+});

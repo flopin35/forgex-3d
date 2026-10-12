@@ -7,6 +7,7 @@ import { Icon, type IconName } from './icons';
 function iconFor(object: SceneObject): IconName {
   if (object.kind === 'group') return 'group';
   if (object.source.type === 'primitive') return object.source.primitive;
+  if (object.source.type === 'sketch') return 'blueprint';
   return Object.keys(object.source.graph.faces).length === 1 ? 'plane' : 'cube';
 }
 

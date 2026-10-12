@@ -73,6 +73,46 @@ const ICONS = {
   folder: <path d="M3.5 6.5h6l2 2h9v10a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1Z" />,
   save: <path d="M5 4h11l3 3v13H5Z M8 4v5h7V4 M8 20v-6h8v6" />,
   close: <path d="M6 6l12 12 M18 6 6 18" />,
+  pen: <path d="M4 20l4.6-1.1L19 8.5a2.1 2.1 0 0 0-3-3L5.6 15.9Z M14.2 7.3l3 3" />,
+  blueprint: (
+    <>
+      <path d="M6.6 16.6 11 7.6 M13.2 7.4l4.4 7.2" />
+      <circle cx="5.8" cy="18.2" r="1.9" />
+      <circle cx="12" cy="5.8" r="1.9" />
+      <circle cx="18.6" cy="16.2" r="1.9" />
+    </>
+  ),
+  rectangle: (
+    <>
+      <path d="M6.5 6h11 M6.5 18h11 M6 6.5v11 M18 6.5v11" />
+      <circle cx="6" cy="6" r="1.4" />
+      <circle cx="18" cy="6" r="1.4" />
+      <circle cx="6" cy="18" r="1.4" />
+      <circle cx="18" cy="18" r="1.4" />
+    </>
+  ),
+  circle: (
+    <>
+      <circle cx="12" cy="12" r="7.5" />
+      <path d="M12 12h7.5" strokeDasharray="1.5 2" />
+      <circle cx="12" cy="12" r="1" />
+    </>
+  ),
+  mirror: <path d="M12 3v3 M12 9v2 M12 14v2 M12 19v2 M9.5 7.5 4 17h5.5Z M14.5 7.5 20 17h-5.5Z" />,
+  turntable: (
+    <path d="M12 4.5 16.5 7v5L12 14.5 7.5 12V7Z M7.5 7 12 9.5 16.5 7 M12 9.5v5 M3.5 14.5c1.2 2.6 4.5 4.5 8.5 4.5 3.3 0 6.1-1.3 7.6-3.2 M17.2 14.6l2.6 1.1-.6 2.8" />
+  ),
+  export: <path d="M12 3.5v11 M7.5 10 12 14.5l4.5-4.5 M5 17v2.5h14V17" />,
+  plus: <path d="M12 5v14 M5 12h14" />,
+  shapeFlat: <path d="M3 14.5 12 10l9 4.5-9 4.5Z" />,
+  shapeExtrude: <path d="M4 14.5 12 10.5l8 4-8 4Z M4 14.5V9.5L12 5.5l8 4v5 M12 10.5v-5" />,
+  shapeRevolve: (
+    <path d="M9.5 3.5h5 M10.2 3.5c.3 2.5-4.2 4-4.2 9 0 4.4 2.7 8 6 8s6-3.6 6-8c0-5-4.5-6.5-4.2-9 M6.2 12.5c1.5.9 3.6 1.4 5.8 1.4s4.3-.5 5.8-1.4" />
+  ),
+  sidebar: <path d="M3.5 5h17v14h-17Z M15 5v14" />,
+  fit: <path d="M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5 M9 9h6v6H9Z" />,
+  chevronUp: <path d="M6 15l6-6 6 6" />,
+  magnet: <path d="M5 4h4v8a3 3 0 0 0 6 0V4h4v8a7 7 0 0 1-14 0Z M5 8h4 M15 8h4" />,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof ICONS;
