@@ -4,7 +4,8 @@ import { AppToolHost } from './automationHost';
 import type { EditorActions } from './editorActions';
 
 /**
- * Links the app to a running FORGEX MCP server (mcp/forgex-mcp.cjs) on this computer.
+ * Links the app to a running FORGEX MCP server on this computer: the one built into
+ * FORGEX 3D.exe (run with --mcp by an AI app) or the Node.js one (mcp/forgex-mcp.cjs).
  * The app asks the server for the next tool call, runs it on the open project and
  * sends the result back. When no server is running, it quietly retries every few seconds.
  */
@@ -62,14 +63,17 @@ export function startMcpBridge(actions: EditorActions): () => void {
   const setConnected = (connected: boolean) => {
     if (connected === aiLink.getSnapshot().connected) return;
     aiLink.set({ connected });
-    actions.store.log('info', connected ? 'AI link connected: an MCP client can now work in this project.' : 'AI link closed.');
+    actions.store.log('info', connected ? 'An AI assistant is linked: it can now work in this project.' : 'The AI assistant link closed.', undefined, { quiet: !connected });
   };
 
   const runJob = async (job: BridgeJob) => {
     aiLink.set({ busyWith: job.tool });
     try {
+      const wasEmpty = Object.keys(actions.store.getState().scene.objects).length === 0;
       const output: ToolOutput = await runTool(job.tool, job.args, { store: actions.store, host });
-      if (!isReadOnlyTool(job.tool)) actions.store.log('info', `AI · ${job.tool}: ${firstLine(output.text)}`);
+      // The first thing an assistant builds is brought into view, so the user sees it appear.
+      if (wasEmpty && Object.keys(actions.store.getState().scene.objects).length > 0) actions.frameSelection();
+      if (!isReadOnlyTool(job.tool)) actions.store.log('info', `AI · ${job.tool}: ${firstLine(output.text)}`, undefined, { quiet: true });
       return { id: job.id, ok: true, output };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -106,7 +110,8 @@ export function startMcpBridge(actions: EditorActions): () => void {
         if (stopped) return;
         setConnected(false);
         failures++;
-        await sleep(Math.min(10_000, 2_000 * failures));
+        // Retry often: the server is local, and an AI app that just started its server should link within seconds.
+        await sleep(Math.min(3_000, 1_000 * failures));
       }
     }
   };

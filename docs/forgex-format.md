@@ -2,7 +2,7 @@
 
 A `.forgex` file is a UTF-8 JSON document. It stores the **editable source** of a project (the scene graph and construction graphs), never only the generated triangles, so everything you build can be reopened and edited.
 
-Current version: **3**. Version 2 added blueprints; version 3 added smooth dots, bodies, modifiers, smooth shading and reference pictures. All additions are optional fields, so version 1 and 2 files open unchanged. Reading and validation live in `src/core/project/projectFile.ts`.
+Current version: **4**. Version 2 added blueprints; version 3 added smooth dots, bodies, modifiers, smooth shading and reference pictures; version 4 added locked objects and snapshots (saved versions). All additions are optional fields, so older files open unchanged. Reading and validation live in `src/core/project/projectFile.ts`.
 
 ## Top level
 
@@ -17,6 +17,7 @@ Current version: **3**. Version 2 added blueprints; version 3 added smooth dots,
 | `scene` | object | `rootIds` (top-level object ids, in order) and `objects` (all objects, parents before children). |
 | `camera` | object, optional | `position` and `target`, each `[x, y, z]` in metres. |
 | `references` | array, optional | Pictures behind the board to trace over; see below. |
+| `snapshots` | array, optional | Saved versions of the scene; see below. |
 
 ## World conventions (`units`)
 
@@ -40,6 +41,7 @@ Every object has:
 | `parentId` | string or `null` | Must match the parent's `childIds`. |
 | `childIds` | string[] | Children in display order. |
 | `visible` | boolean | |
+| `locked` | `true`, optional | A locked object cannot be picked in the 3D view, moved, edited or deleted until it is unlocked. Locking a group protects everything inside it. |
 | `transform` | object | `position`, `rotation` (degrees), `scale`, each `[x, y, z]`, relative to the parent. |
 
 Meshes also have `material` (`color` as `#rrggbb`, and `smooth: true` for smooth shading), optional `modifiers`, and a `source`.
@@ -115,6 +117,33 @@ Meshes also have `material` (`color` as `#rrggbb`, and `smooth: true` for smooth
 ```
 
 The picture is stored inside the project (`src` must be a `data:image/` URL of PNG, JPEG, WebP, GIF or SVG, under 24 MB as text). `x` and `y` are its centre on the board in metres, `width` its width in metres, `aspect` its height divided by width. Invalid pictures are skipped with a warning; they never stop a project from opening.
+
+## Snapshots
+
+```json
+{ "id": "snap_3f9a1c0b2d4e5f60", "name": "Before new wheels", "createdAt": "2026-10-13T18:02:11.000Z", "scene": { "rootIds": [...], "objects": [...] } }
+```
+
+A snapshot is a full copy of the scene, in the same form as the top-level `scene`, kept so the user can go back to it. Restoring one replaces the scene as one undoable change. Projects keep the newest 40. A snapshot that cannot be read is skipped with a warning; it never stops a project from opening.
+
+## My Parts: .forgexpart files
+
+Reusable parts live outside any project, one per file, in the library folder (`Documents\FORGEX 3D\Library` on Windows), so every project and the MCP server can use them.
+
+```json
+{
+  "format": "forgex-part",
+  "version": 1,
+  "generator": "FORGEX 3D 0.2.0",
+  "name": "Sport wheel",
+  "description": "18 inch, five spokes",
+  "createdAt": "2026-10-13T18:02:11.000Z",
+  "scene": { "rootIds": ["obj_..."], "objects": [...] },
+  "thumbnail": "data:image/jpeg;base64,..."
+}
+```
+
+`scene` holds exactly one root object (with any children), in the project form, standing at the origin. Adding a part to a project copies it with fresh ids. The file name comes from the part name (`Sport wheel.forgexpart`). Reading and writing live in `src/core/library/libraryPart.ts`.
 
 ## Rules checked on load
 

@@ -36,9 +36,11 @@ async function main(): Promise<void> {
   }
 
   const appNote = () =>
-    bridge
-      ? 'the FORGEX 3D app is not open; start it and it links automatically'
-      : `the app link is unavailable because port ${port} is in use by another FORGEX MCP server`;
+    mode === 'file'
+      ? 'file mode was chosen with FORGEX_MCP_MODE'
+      : bridge
+        ? 'the FORGEX 3D app is not open; start it and it links automatically'
+        : `the app link is unavailable because port ${port} is in use by another FORGEX MCP server`;
   const fileHost = new FileHost(defaultProjectsFolder(), appNote);
   const handler = createMcpHandler({ mode, bridge, fileHost, log });
 

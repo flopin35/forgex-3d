@@ -1,11 +1,15 @@
-import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { mkdir, readFile, stat } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { ToolError, type HostStatus, type ToolHost } from '../src/core/automation/toolTypes';
 import { EditorStore } from '../src/core/editor/editorStore';
 import { createDefaultDocument, createEmptyDocument } from '../src/core/project/defaultDocument';
 import { projectNameFromPath } from '../src/core/project/paths';
 import { parseProject, serializeProject } from '../src/core/project/projectFile';
+import { writeFileAtomically } from './atomic';
+import { FolderLibrary } from './library';
 import { resolveProjectPath } from './paths';
+
+export { writeFileAtomically };
 
 const MAX_PROJECT_BYTES = 512 * 1024 * 1024;
 
@@ -18,29 +22,20 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-/** Same safety rule as the desktop app: write a temporary file, then rename it over the target. */
-export async function writeFileAtomically(target: string, contents: string): Promise<void> {
-  const temp = join(dirname(target), `.${basename(target)}.saving`);
-  try {
-    await writeFile(temp, contents, 'utf8');
-    await rename(temp, target);
-  } catch (error) {
-    await unlink(temp).catch(() => undefined);
-    throw error;
-  }
-}
-
 /**
  * Runs the tools on a project held by the MCP server itself, used when the
  * FORGEX 3D app is not open. Projects with a file are saved after every change.
  */
 export class FileHost implements ToolHost {
   readonly store = new EditorStore(createEmptyDocument(), 'Untitled', null);
+  readonly library: FolderLibrary;
 
   constructor(
     readonly projectsFolder: string,
     private readonly appNote: () => string,
-  ) {}
+  ) {
+    this.library = new FolderLibrary(projectsFolder);
+  }
 
   status(): HostStatus {
     return {
@@ -103,12 +98,12 @@ export class FileHost implements ToolHost {
 
   private async write(target: string): Promise<void> {
     const revision = this.store.revision;
-    const settings = this.store.getState().settings;
+    const { settings, references, snapshots } = this.store.getState();
     const text = serializeProject(this.store.toDocument());
     const check = parseProject(text);
     if (!check.ok) throw new ToolError(`The project failed validation, so nothing was written:\n${check.errors.join('\n')}`);
     await mkdir(dirname(target), { recursive: true });
     await writeFileAtomically(target, text);
-    this.store.markSaved(projectNameFromPath(target), target, revision, settings);
+    this.store.markSaved(projectNameFromPath(target), target, revision, settings, references, snapshots);
   }
 }

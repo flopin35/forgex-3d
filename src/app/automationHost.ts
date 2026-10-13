@@ -1,5 +1,5 @@
 import { ToolError, type HostStatus, type ToolHost, type ToolImage, type ViewPreset } from '../core/automation/toolTypes';
-import { projectNameFromPath } from '../core/project/paths';
+import { ensureProjectExtension, projectNameFromPath } from '../core/project/paths';
 import type { EditorActions } from './editorActions';
 
 /**
@@ -8,6 +8,11 @@ import type { EditorActions } from './editorActions';
  */
 export class AppToolHost implements ToolHost {
   constructor(private readonly actions: EditorActions) {}
+
+  /** The same My Parts library the app shows, so parts saved by the AI appear there at once. */
+  get library() {
+    return this.actions.files.library;
+  }
 
   status(): HostStatus {
     return {
@@ -19,7 +24,22 @@ export class AppToolHost implements ToolHost {
     };
   }
 
-  async newProject({ path, empty }: { path?: string; empty: boolean }): Promise<string> {
+  /**
+   * AI tools may name a project ("kart") instead of giving a full path: those go in the
+   * projects folder (Documents\FORGEX 3D), the same place the Node server would use.
+   */
+  private async resolvePath(path: string | undefined): Promise<string | undefined> {
+    if (!path?.trim()) return undefined;
+    const trimmed = path.trim();
+    if (/^([a-zA-Z]:[\\/]|\\\\|\/)/.test(trimmed)) return ensureProjectExtension(trimmed);
+    const folders = await this.actions.files.folders().catch(() => null);
+    if (!folders) return ensureProjectExtension(trimmed);
+    const separator = folders.projects.includes('\\') ? '\\' : '/';
+    return ensureProjectExtension(`${folders.projects.replace(/[\\/]+$/, '')}${separator}${trimmed.replace(/^[\\/]+/, '')}`);
+  }
+
+  async newProject({ path: rawPath, empty }: { path?: string; empty: boolean }): Promise<string> {
+    const path = await this.resolvePath(rawPath);
     const started = await this.actions.startNewProject({ empty, path });
     if (!started) throw new ToolError('The user kept their unsaved changes, so no new project was started.');
     return path
@@ -27,8 +47,9 @@ export class AppToolHost implements ToolHost {
       : 'Started an untitled project in the app. Call save_project with a name to write it.';
   }
 
-  async openProject(path: string): Promise<string> {
+  async openProject(rawPath: string): Promise<string> {
     if (this.actions.files.kind !== 'desktop') throw new ToolError('Opening a project by path needs the desktop app (npm run desktop).');
+    const path = (await this.resolvePath(rawPath)) ?? rawPath;
     try {
       const result = await this.actions.openProjectAt(path);
       if (!result.opened) throw new ToolError(result.message);
@@ -39,7 +60,8 @@ export class AppToolHost implements ToolHost {
     }
   }
 
-  async saveProject(path?: string): Promise<string> {
+  async saveProject(rawPath?: string): Promise<string> {
+    const path = await this.resolvePath(rawPath);
     const saved = path ? await this.actions.saveProjectTo(path) : await this.actions.saveProject();
     const state = this.actions.store.getState();
     if (!saved) {

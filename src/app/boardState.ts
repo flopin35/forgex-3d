@@ -21,8 +21,8 @@ export interface BoardState {
   circleSides: number;
   /** Spin the 3D view slowly. */
   turntable: boolean;
-  /** Show the Scene and Properties panels on the right. */
-  sidebar: boolean;
+  /** Show each straight line's length on the board, like dimensions on a technical drawing. */
+  showSizes: boolean;
   /** Share of the width taken by the board (the 3D view gets the rest). */
   split: number;
   /** Snap new and moved dots to the board grid. */
@@ -50,7 +50,7 @@ export const BOARD_SNAP_SIZES: readonly { size: number; label: string }[] = [
 ];
 
 const PREFS_KEY = 'forgex.board.v1';
-const PERSISTED = ['circleSides', 'sidebar', 'split', 'newPlane', 'snap', 'snapSize'] as const;
+const PERSISTED = ['circleSides', 'showSizes', 'split', 'newPlane', 'snap', 'snapSize'] as const;
 
 function loadPrefs(): Partial<BoardState> {
   try {
@@ -59,7 +59,7 @@ function loadPrefs(): Partial<BoardState> {
     const data = JSON.parse(raw) as Partial<BoardState>;
     const prefs: Partial<BoardState> = {};
     if (typeof data.circleSides === 'number' && data.circleSides >= 3 && data.circleSides <= 96) prefs.circleSides = Math.round(data.circleSides);
-    if (typeof data.sidebar === 'boolean') prefs.sidebar = data.sidebar;
+    if (typeof data.showSizes === 'boolean') prefs.showSizes = data.showSizes;
     if (typeof data.split === 'number' && data.split >= 0.2 && data.split <= 0.8) prefs.split = data.split;
     if (data.newPlane === 'front' || data.newPlane === 'side' || data.newPlane === 'top') prefs.newPlane = data.newPlane;
     if (typeof data.snap === 'boolean') prefs.snap = data.snap;
@@ -83,7 +83,7 @@ class BoardStore {
     newPlane: 'front',
     circleSides: 24,
     turntable: false,
-    sidebar: true,
+    showSizes: true,
     split: 0.5,
     snap: true,
     snapSize: 0.05,
@@ -144,3 +144,9 @@ class BoardStore {
 }
 
 export const boardStore = new BoardStore();
+
+/**
+ * Where the pointer is on the board, in drawing coordinates (null when it is elsewhere).
+ * Kept outside the store on purpose: it changes on every mouse move and nothing re-renders from it.
+ */
+export const boardPointer: { position: [number, number] | null } = { position: null };

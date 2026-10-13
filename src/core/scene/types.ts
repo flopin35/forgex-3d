@@ -34,6 +34,8 @@ interface SceneObjectBase {
   readonly childIds: readonly string[];
   readonly transform: Transform;
   readonly visible: boolean;
+  /** A locked object cannot be picked in the 3D view, moved, edited or deleted until it is unlocked. */
+  readonly locked?: boolean;
 }
 
 export interface MeshObject extends SceneObjectBase {

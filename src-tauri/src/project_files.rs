@@ -42,6 +42,10 @@ pub fn read_project(path: &Path) -> Result<String, String> {
 
 pub fn write_project(path: &Path, contents: &str) -> Result<(), String> {
     require_project_path(path)?;
+    // AI tools may save into a projects folder that does not exist yet.
+    if let Some(folder) = path.parent().filter(|folder| !folder.as_os_str().is_empty()) {
+        fs::create_dir_all(folder).map_err(|e| format!("Could not create {}: {e}", folder.display()))?;
+    }
     write_atomically(path, contents.as_bytes()).map_err(|e| format!("Could not save {}: {e}", path.display()))
 }
 

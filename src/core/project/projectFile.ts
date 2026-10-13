@@ -7,11 +7,12 @@ import { HEX_COLOR, PRIMITIVE_KINDS, type MaterialSettings, type MeshSource, typ
 import { BODY_VIEWS, clampBody, type BodySettings, type BodyViews } from '../sketch/body';
 import { sketchFromJson, sketchToJson, viewFromJson, viewToJson, type SketchJson, type SketchViewJson } from '../sketch/sketchJson';
 import { readReferences, type ReferenceImage } from './references';
+import { MAX_SNAPSHOTS, type Snapshot } from './snapshots';
 import { WORLD_CONVENTIONS } from '../units';
 import { APP_NAME, APP_VERSION } from '../version';
 
 export const PROJECT_FORMAT = 'forgex-project';
-export const PROJECT_FORMAT_VERSION = 3;
+export const PROJECT_FORMAT_VERSION = 4;
 export const PROJECT_EXTENSION = 'forgex';
 
 export interface ProjectSettings {
@@ -33,6 +34,8 @@ export interface ProjectDocument {
   camera: CameraState | null;
   /** Pictures to trace over on the board. Absent when there are none. */
   references?: readonly ReferenceImage[];
+  /** Saved versions of the scene to go back to. Absent when there are none. */
+  snapshots?: readonly Snapshot[];
 }
 
 export const DEFAULT_SETTINGS: ProjectSettings = { gridSize: 0.25, snapEnabled: true, rotationSnapDegrees: 15 };
@@ -50,27 +53,34 @@ interface SerializedObject {
   parentId: string | null;
   childIds: string[];
   visible: boolean;
+  locked?: true;
   transform: Transform;
   material?: { color: string; smooth?: true };
   modifiers?: MeshModifiers;
   source?: SerializedSource;
 }
 
+interface SerializedScene {
+  rootIds: string[];
+  objects: SerializedObject[];
+}
+
 /**
  * The current file format. Version 2 added blueprints; version 3 added smooth dots,
- * bodies lofted from three views, modifiers, smooth shading and reference pictures.
- * See docs/forgex-format.md.
+ * bodies lofted from three views, modifiers, smooth shading and reference pictures;
+ * version 4 added locked objects and snapshots. See docs/forgex-format.md.
  */
-export interface ProjectFileV3 {
+export interface ProjectFileV4 {
   format: typeof PROJECT_FORMAT;
-  version: 3;
+  version: 4;
   generator: string;
   savedAt: string;
   units: typeof WORLD_CONVENTIONS;
   settings: ProjectSettings;
-  scene: { rootIds: string[]; objects: SerializedObject[] };
+  scene: SerializedScene;
   camera?: CameraState;
   references?: ReferenceImage[];
+  snapshots?: { id: string; name: string; createdAt: string; scene: SerializedScene }[];
 }
 
 function serializeSource(source: MeshSource): SerializedSource {
@@ -98,6 +108,7 @@ function serializeObject(object: SceneObject): SerializedObject {
     parentId: object.parentId,
     childIds: [...object.childIds],
     visible: object.visible,
+    ...(object.locked ? { locked: true as const } : {}),
     transform: {
       position: [...object.transform.position],
       rotation: [...object.transform.rotation],
@@ -113,7 +124,7 @@ function serializeObject(object: SceneObject): SerializedObject {
 }
 
 /** Writes objects parents-first in hierarchy order, so files read top to bottom. */
-function orderedObjects(scene: Scene): SceneObject[] {
+export function orderedObjects(scene: Scene): SceneObject[] {
   const out: SceneObject[] = [];
   const visit = (id: string) => {
     const object = scene.objects[id];
@@ -125,21 +136,31 @@ function orderedObjects(scene: Scene): SceneObject[] {
   return out;
 }
 
+/** A scene in file form: roots plus objects listed parents first. */
+export function serializeScene(scene: Scene): SerializedScene {
+  return { rootIds: [...scene.rootIds], objects: orderedObjects(scene).map(serializeObject) };
+}
+
+/** Objects in file form, in the order given (used for library parts). */
+export function serializeObjects(objects: readonly SceneObject[]): unknown[] {
+  return objects.map(serializeObject);
+}
+
 export function serializeProject(document: ProjectDocument, now: Date = new Date()): string {
-  const file: ProjectFileV3 = {
+  const file: ProjectFileV4 = {
     format: PROJECT_FORMAT,
     version: PROJECT_FORMAT_VERSION,
     generator: `${APP_NAME} ${APP_VERSION}`,
     savedAt: now.toISOString(),
     units: { ...WORLD_CONVENTIONS },
     settings: { ...document.settings },
-    scene: {
-      rootIds: [...document.scene.rootIds],
-      objects: orderedObjects(document.scene).map(serializeObject),
-    },
+    scene: serializeScene(document.scene),
   };
   if (document.camera) file.camera = { position: [...document.camera.position], target: [...document.camera.target] };
   if (document.references?.length) file.references = document.references.map((reference) => ({ ...reference }));
+  if (document.snapshots?.length) {
+    file.snapshots = document.snapshots.map((snapshot) => ({ id: snapshot.id, name: snapshot.name, createdAt: snapshot.createdAt, scene: serializeScene(snapshot.scene) }));
+  }
   return `${JSON.stringify(file, null, 2)}\n`;
 }
 
@@ -159,6 +180,8 @@ export const PROJECT_MIGRATIONS: Readonly<Record<number, Migration>> = {
   1: (data) => data,
   // Version 3 added optional fields only (smooth dots, bodies, modifiers, shading, references).
   2: (data) => data,
+  // Version 4 added optional fields only (locked objects, snapshots).
+  3: (data) => data,
 };
 
 export function migrateProjectData(
@@ -260,7 +283,7 @@ function readObject(raw: unknown, at: string, errors: string[]): SceneObject | n
     return null;
   }
   const start = errors.length;
-  const { id, name, kind, parentId, childIds, visible } = raw;
+  const { id, name, kind, parentId, childIds, visible, locked } = raw;
   if (typeof id !== 'string' || id.length === 0 || id.length > 64) errors.push(`${at}.id must be text of 1–64 characters.`);
   if (typeof name !== 'string' || name.length > 200) errors.push(`${at}.name must be text of at most 200 characters.`);
   if (kind !== 'mesh' && kind !== 'group') errors.push(`${at}.kind must be "mesh" or "group".`);
@@ -269,6 +292,7 @@ function readObject(raw: unknown, at: string, errors: string[]): SceneObject | n
     errors.push(`${at}.childIds must be a list of object ids.`);
   }
   if (typeof visible !== 'boolean') errors.push(`${at}.visible must be true or false.`);
+  if (locked !== undefined && typeof locked !== 'boolean') errors.push(`${at}.locked must be true or false.`);
   const transform = readTransform(raw.transform, `${at}.transform`, errors);
 
   let mesh: { source: MeshSource; material: MaterialSettings; modifiers?: MeshModifiers } | null = null;
@@ -301,6 +325,7 @@ function readObject(raw: unknown, at: string, errors: string[]): SceneObject | n
     parentId: parentId as string | null,
     childIds: [...(childIds as string[])],
     visible: visible as boolean,
+    ...(locked === true ? { locked: true } : {}),
     transform,
   };
   return kind === 'group' ? { ...base, kind: 'group' } : { ...base, kind: 'mesh', ...mesh! };
@@ -326,6 +351,55 @@ function checkHierarchy(objects: Record<string, SceneObject>, rootIds: string[],
   for (const id of Object.keys(objects)) {
     if (!seen.has(id)) errors.push(`Object ${id} is not reachable from the scene roots.`);
   }
+}
+
+/** Reads a list of objects in file form. Problems are added to `errors`. */
+export function readObjects(raw: unknown[], at: string, errors: string[]): Record<string, SceneObject> {
+  const objects: Record<string, SceneObject> = {};
+  raw.forEach((item, i) => {
+    const object = readObject(item, `${at}[${i}]`, errors);
+    if (!object) return;
+    if (objects[object.id]) errors.push(`Object id ${object.id} is used twice.`);
+    else objects[object.id] = object;
+  });
+  return objects;
+}
+
+/** Reads a scene in file form (roots plus objects) and checks its hierarchy. */
+export function readScene(raw: unknown, at: string, errors: string[]): Scene | null {
+  if (!isRecord(raw) || !Array.isArray(raw.objects) || !Array.isArray(raw.rootIds)) {
+    errors.push(`${at} needs rootIds and objects lists.`);
+    return null;
+  }
+  const start = errors.length;
+  const objects = readObjects(raw.objects, `${at}.objects`, errors);
+  const rootIds = raw.rootIds.filter((id): id is string => typeof id === 'string');
+  if (rootIds.length !== raw.rootIds.length) errors.push(`${at}.rootIds must contain only object ids.`);
+  if (errors.length === start) checkHierarchy(objects, rootIds, errors);
+  return errors.length === start ? { objects, rootIds } : null;
+}
+
+function readSnapshots(raw: unknown, warnings: string[]): Snapshot[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) {
+    warnings.push('The saved snapshots were not a list and were skipped.');
+    return [];
+  }
+  const out: Snapshot[] = [];
+  raw.slice(-MAX_SNAPSHOTS).forEach((item, i) => {
+    if (!isRecord(item) || typeof item.id !== 'string' || typeof item.name !== 'string' || typeof item.createdAt !== 'string') {
+      warnings.push(`Snapshot ${i + 1} is missing its id, name or date and was skipped.`);
+      return;
+    }
+    const problems: string[] = [];
+    const scene = readScene(item.scene, `snapshots[${i}].scene`, problems);
+    if (!scene) {
+      warnings.push(`Snapshot “${item.name.slice(0, 80)}” could not be read and was skipped: ${problems[0] ?? 'invalid scene'}`);
+      return;
+    }
+    out.push({ id: item.id.slice(0, 64), name: item.name.slice(0, 120), createdAt: item.createdAt.slice(0, 40), scene });
+  });
+  return out;
 }
 
 /** Reads a .forgex file. Never throws: problems come back as readable errors. */
@@ -382,13 +456,7 @@ export function parseProject(text: string): ParseResult {
     return { ok: false, errors: [...errors, 'The file has no valid scene (it needs rootIds and objects lists).'] };
   }
 
-  const objects: Record<string, SceneObject> = {};
-  sceneRaw.objects.forEach((item, i) => {
-    const object = readObject(item, `scene.objects[${i}]`, errors);
-    if (!object) return;
-    if (objects[object.id]) errors.push(`Object id ${object.id} is used twice.`);
-    else objects[object.id] = object;
-  });
+  const objects = readObjects(sceneRaw.objects, 'scene.objects', errors);
   const rootIds = sceneRaw.rootIds.filter((id): id is string => typeof id === 'string');
   if (rootIds.length !== sceneRaw.rootIds.length) errors.push('scene.rootIds must contain only object ids.');
   if (errors.length === 0) checkHierarchy(objects, rootIds, errors);
@@ -417,7 +485,9 @@ export function parseProject(text: string): ParseResult {
   }
 
   const references = readReferences(data.references, warnings);
+  const snapshots = readSnapshots(data.snapshots, warnings);
   const document: ProjectDocument = { scene: { objects, rootIds }, settings, camera };
   if (references.length) document.references = references;
+  if (snapshots.length) document.snapshots = snapshots;
   return { ok: true, document, warnings, migratedFrom };
 }

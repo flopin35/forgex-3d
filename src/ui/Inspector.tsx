@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { boardStore } from '../app/boardState';
 import { isDrawn, type DrawnObject } from '../app/drawing';
 import { useActions, useEditor } from '../app/EditorContext';
 import { perfStats } from '../app/perfStats';
@@ -9,6 +8,7 @@ import { MIRROR_AXES } from '../core/geometry/modifiers';
 import type { Transform } from '../core/math/transform';
 import type { Vec3 } from '../core/math/vec3';
 import { PROJECT_FORMAT_VERSION } from '../core/project/projectFile';
+import { isLocked } from '../core/scene/scene';
 import { HEX_COLOR, isConstructionMesh, meshGraphOf, type MeshObject, type SceneObject } from '../core/scene/types';
 import { BODY_VIEWS } from '../core/sketch/body';
 import { SKETCH_PLANES, type SketchPlane } from '../core/sketch/sketch';
@@ -48,29 +48,46 @@ function describeKind(object: SceneObject): string {
 export function Inspector() {
   const selected = useEditor((s) => (s.selectedId ? s.scene.objects[s.selectedId] ?? null : null));
   return (
-    <section className="panel inspector" aria-label="Properties">
-      <div className="panel-header">
-        <h2>Properties</h2>
-      </div>
-      <div className="panel-scroll">{selected ? <ObjectProperties object={selected} /> : <ProjectProperties />}</div>
+    <section className="inspector" aria-label="Properties">
+      {selected ? <ObjectProperties object={selected} /> : <ProjectProperties />}
     </section>
   );
 }
 
 function ObjectProperties({ object }: { object: SceneObject }) {
   const actions = useActions();
+  const locked = useEditor((s) => isLocked(s.scene, object.id));
   return (
     <>
       <div className="inspector-title">
-        <NameField key={object.id} id={object.id} name={object.name} />
+        <div className="inspector-name-row">
+          <NameField key={object.id} id={object.id} name={object.name} />
+          <button
+            type="button"
+            className={`icon-button ${object.locked ? 'is-active' : ''}`}
+            aria-pressed={!!object.locked}
+            onClick={() => actions.toggleLock(object.id)}
+            title={object.locked ? 'Unlock (Ctrl+L)' : 'Lock against changes (Ctrl+L)'}
+          >
+            <Icon name={object.locked ? 'lock' : 'unlock'} />
+          </button>
+        </div>
         <span className="kind-label">{describeKind(object)}</span>
+        {locked && (
+          <p className="locked-note">
+            <Icon name="lock" size={13} />
+            {object.locked ? 'Locked. Unlock it to move or edit it.' : 'Inside a locked group. Unlock the group to edit it.'}
+          </p>
+        )}
       </div>
+      <fieldset className="inspector-fields" disabled={locked}>
       <TransformSection object={object} />
       {isDrawn(object) && <DrawingSection object={object} />}
       {object.kind === 'mesh' && <AppearanceSection object={object} />}
       {object.kind === 'mesh' && !isDrawn(object) && object.source.type === 'construction' && <FinishSection object={object} />}
       {isConstructionMesh(object) && <GeometrySection object={object} />}
       {object.kind === 'mesh' && (isDrawn(object) || !!object.modifiers) && <GeneratedGeometrySection object={object} />}
+      </fieldset>
       <section className="inspector-section">
         <div className="section-actions">
           <button type="button" className="text-button" onClick={actions.duplicateSelection}>
@@ -79,7 +96,10 @@ function ObjectProperties({ object }: { object: SceneObject }) {
           <button type="button" className="text-button" onClick={actions.groupSelection}>
             <Icon name="group" size={14} /> Group
           </button>
-          <button type="button" className="text-button is-danger" onClick={actions.deleteSelection}>
+          <button type="button" className="text-button" onClick={() => void actions.saveToLibrary({ id: object.id })} title="Keep a copy in My Parts to reuse in any project">
+            <Icon name="library" size={14} /> Save to My Parts
+          </button>
+          <button type="button" className="text-button is-danger" onClick={actions.deleteSelection} disabled={locked}>
             <Icon name="trash" size={14} /> Delete
           </button>
         </div>
@@ -294,7 +314,7 @@ function GeometrySection({ object }: { object: MeshObject & { source: { type: 'c
         <button type="button" className="text-button" onClick={actions.recalculateNormals} title="Make all faces point outward consistently">
           <Icon name="normals" size={14} /> Recalculate normals
         </button>
-        <button type="button" className="text-button" onClick={actions.checkGeometry} title="Write a geometry report to Diagnostics">
+        <button type="button" className="text-button" onClick={actions.checkGeometry} title="Check the mesh and report any problems">
           <Icon name="inspect" size={14} /> Check
         </button>
       </div>
@@ -349,15 +369,8 @@ function DrawingSection({ object }: { object: DrawnObject }) {
       <section className="inspector-section">
         <h3>Body</h3>
         <p className="hint">
-          Lofted from {BODY_VIEWS.map((view) => `${Object.keys(views[view].points).length} ${view}`).join(', ')} dots. Pick a view tab on the board to edit it.
+          Lofted from {BODY_VIEWS.map((view) => `${Object.keys(views[view].points).length} ${view}`).join(', ')} dots. Pick a view below or on the board to edit it.
         </p>
-        <div className="section-actions">
-          {BODY_VIEWS.map((view) => (
-            <button key={view} type="button" className="text-button" onClick={() => boardStore.set({ bodyView: view })}>
-              <Icon name="pen" size={14} /> {view[0].toUpperCase() + view.slice(1)} view
-            </button>
-          ))}
-        </div>
         <DrawnControls object={object} compact />
       </section>
     );

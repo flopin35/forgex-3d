@@ -3,23 +3,31 @@ import { boardStore } from './app/boardState';
 import { EditorProvider } from './app/EditorContext';
 import { EditorActions } from './app/editorActions';
 import { startMcpBridge } from './app/mcpBridge';
+import { uiStore } from './app/uiState';
 import { useShortcuts } from './app/useShortcuts';
 import { SketchBoard } from './board/SketchBoard';
 import type { EditorStore } from './core/editor/editorStore';
 import { APP_NAME } from './core/version';
 import type { PlatformFiles } from './platform/files';
-import { DiagnosticsPanel } from './ui/DiagnosticsPanel';
-import { HierarchyPanel } from './ui/HierarchyPanel';
-import { Inspector } from './ui/Inspector';
-import { StatusBar } from './ui/StatusBar';
+import { CommandPalette } from './ui/CommandPalette';
+import { ConnectPanel } from './ui/ConnectPanel';
+import { Drawer } from './ui/Drawer';
+import { ShortcutsSheet } from './ui/ShortcutsSheet';
+import { StartScreen } from './ui/StartScreen';
+import { Toasts } from './ui/Toasts';
 import { TopBar } from './ui/TopBar';
 import { Viewport } from './viewport/Viewport';
 
+/**
+ * The calm layout: one slim bar, the board on the left and the 3D object on the right.
+ * Panels (parts, properties, My Parts, versions) stay hidden in a drawer until opened,
+ * and messages pop up briefly instead of filling a panel.
+ */
 export function App({ store, files }: { store: EditorStore; files: PlatformFiles }) {
   const actions = useMemo(() => new EditorActions(store, files), [store, files]);
   useShortcuts(actions);
-  const sidebar = useSyncExternalStore(boardStore.subscribe, () => boardStore.getState().sidebar);
   const split = useSyncExternalStore(boardStore.subscribe, () => boardStore.getState().split);
+  const ui = useSyncExternalStore(uiStore.subscribe, uiStore.getState);
   const stageRef = useRef<HTMLDivElement>(null);
 
   // Window title shows the project name and an unsaved marker.
@@ -67,8 +75,8 @@ export function App({ store, files }: { store: EditorStore; files: PlatformFiles
     <EditorProvider actions={actions}>
       <div className="app">
         <TopBar />
-        <main className={`workspace ${sidebar ? '' : 'no-sidebar'}`}>
-          <div ref={stageRef} className="stage" style={{ gridTemplateColumns: `minmax(0, ${split}fr) 6px minmax(0, ${1 - split}fr)` }}>
+        <main className="workspace">
+          <div ref={stageRef} className="stage" style={{ gridTemplateColumns: `minmax(0, ${split}fr) 10px minmax(0, ${1 - split}fr)` }}>
             <SketchBoard />
             <div
               className="splitter"
@@ -80,17 +88,17 @@ export function App({ store, files }: { store: EditorStore; files: PlatformFiles
             >
               <span className="splitter-grip" />
             </div>
-            <Viewport />
-          </div>
-          {sidebar && (
-            <div className="sidebar">
-              <HierarchyPanel />
-              <Inspector />
+            <div className="view-bay">
+              <Viewport />
+              <Drawer />
             </div>
-          )}
+          </div>
         </main>
-        <DiagnosticsPanel />
-        <StatusBar />
+        <Toasts />
+        {ui.startOpen && <StartScreen />}
+        {ui.connectOpen && <ConnectPanel />}
+        {ui.shortcutsOpen && <ShortcutsSheet />}
+        {ui.paletteOpen && <CommandPalette />}
       </div>
     </EditorProvider>
   );

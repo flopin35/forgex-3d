@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
-import { BOARD_SNAP_SIZES, boardStore, isPenTool, type BoardTool } from '../app/boardState';
+import { BOARD_SNAP_SIZES, boardPointer, boardStore, isPenTool, type BoardTool } from '../app/boardState';
+import { uiStore } from '../app/uiState';
+import { isLocked } from '../core/scene/scene';
+import { polarPoint } from '../core/sketch/edit';
 import { drawingOf, isDrawn, type ActiveDrawing, type DrawnObject } from '../app/drawing';
 import { useActions, useEditor } from '../app/EditorContext';
 import type { MeshSource } from '../core/scene/types';
@@ -25,7 +28,9 @@ import {
 import { metersToStuds } from '../core/units';
 import { Icon, type IconName } from '../ui/icons';
 import { dotAt, fitView, metres, pathAt, snapPoint, toPlane, toScreen, zoomAt, type BoardBox, type BoardView } from './boardMath';
+import { MeasureEntry, parseMeasure, type MeasureDraft } from './MeasureEntry';
 import { ReferencePanel } from './ReferencePanel';
+import { SelectionBar } from './SelectionBar';
 
 type P = [number, number];
 
@@ -128,7 +133,13 @@ export function SketchBoard() {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setViewState] = useState<BoardView>({ scale: 120, ox: 0, oy: 0 });
   const viewRef = useRef(view);
-  const [hover, setHover] = useState<Hover | null>(null);
+  const [hover, setHoverState] = useState<Hover | null>(null);
+  const hoverRef = useRef<Hover | null>(null);
+  const setHover = (next: Hover | null) => {
+    hoverRef.current = next;
+    boardPointer.position = next ? [next.x, next.y] : null;
+    setHoverState(next);
+  };
   const [preview, setPreview] = useState<Preview | null>(null);
   const [panReady, setPanReady] = useState(false);
   const [panning, setPanning] = useState(false);
@@ -140,6 +151,10 @@ export function SketchBoard() {
   const needsFitRef = useRef(true);
 
   const drawing = useMemo(() => drawingOf(selected, board.bodyView), [selected, board.bodyView]);
+  const locked = useEditor((s) => (s.selectedId ? isLocked(s.scene, s.selectedId) : false)) && !!drawing;
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
+  const [measure, setMeasure] = useState<MeasureDraft | null>(null);
   const sketch = drawing?.sketch ?? null;
   const object = drawing?.object ?? null;
   const isBody = object?.source.type === 'body';
@@ -252,6 +267,39 @@ export function SketchBoard() {
       window.removeEventListener('keyup', up);
     };
   }, []);
+
+  // Typing a number while a line is being drawn opens the exact-size box.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) return;
+      const ui = uiStore.getState();
+      if (ui.paletteOpen || ui.connectOpen || ui.shortcutsOpen || ui.startOpen) return;
+      const state = boardStore.getState();
+      const active = actions.activeDrawing();
+      const from = state.chainFrom && active?.sketch.points[state.chainFrom];
+      if (!isPenTool(state.tool) || !from || lockedRef.current) return;
+      if (!/^[0-9.,]$/.test(event.key)) return;
+      event.preventDefault();
+      const target = hoverRef.current;
+      const angle = target ? (Math.atan2(target.y - from.y, target.x - from.x) * 180) / Math.PI : 0;
+      setMeasure({ length: event.key === ',' ? '0.' : event.key === '.' ? '0.' : event.key, angle: String(Math.round(angle * 10) / 10), focus: 'length' });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [actions]);
+
+  // The box closes when the line stops or the drawing changes.
+  useEffect(() => {
+    if (!board.chainFrom || !isPenTool(board.tool)) setMeasure(null);
+  }, [board.chainFrom, board.tool]);
+
+  const submitMeasure = () => {
+    if (!measure) return;
+    const length = parseMeasure(measure.length);
+    const angle = parseMeasure(measure.angle);
+    if (length === null || length <= 0 || angle === null) return;
+    if (actions.placeDotAt(length, angle)) setMeasure(null);
+  };
 
   // -- Resolved drawing: curves, mirror copies and filled areas ---------------------------------
 
@@ -449,6 +497,12 @@ export function SketchBoard() {
         gestureRef.current = { kind: 'reference', id: reference.id, px0: px, py0: py, x0: reference.x, y0: reference.y };
         return;
       }
+    }
+
+    // A locked drawing can be looked at (panned and zoomed) but not changed.
+    if (lockedRef.current) {
+      gestureRef.current = { kind: 'pan', sx0: sx, sy0: sy, view0: viewRef.current, moved: false, button: 0 };
+      return;
     }
 
     const h = locate(sx, sy, event.shiftKey);
@@ -708,21 +762,61 @@ export function SketchBoard() {
   const chainPoint = pen && board.chainFrom && sketch ? sketch.points[board.chainFrom] ?? null : null;
   const selectedPoints = new Set(board.selectedPoints);
   const selectedLines = new Set(board.selectedLines);
-  const showCursor = hover && !panning && !panReady && !board.adjustingReference && (board.tool !== 'select' || gestureRef.current?.kind === 'dots');
-  const drawingLength = chainPoint && hover && pen ? Math.hypot(hover.x - chainPoint.x, hover.y - chainPoint.y) : null;
+  const showCursor = hover && !panning && !panReady && !locked && !board.adjustingReference && (board.tool !== 'select' || gestureRef.current?.kind === 'dots');
+  // While a size is typed, the line being drawn goes where the typed numbers say.
+  const typedTarget = (() => {
+    if (!measure || !chainPoint) return null;
+    const length = parseMeasure(measure.length);
+    const angle = parseMeasure(measure.angle);
+    return length !== null && length > 0 && angle !== null ? polarPoint([chainPoint.x, chainPoint.y], length, angle) : null;
+  })();
+  const rubberEnd: [number, number] | null = typedTarget ?? (hover && showCursor ? [hover.x, hover.y] : null);
+  const drawingLength = chainPoint && rubberEnd && pen ? Math.hypot(rubberEnd[0] - chainPoint.x, rubberEnd[1] - chainPoint.y) : null;
   const fill = object?.material.color ?? '#62cbff';
   const s = (x: number, y: number) => toScreen(view, x, y);
   const planeReferences = references.filter((r) => r.plane === plane && r.visible);
   const hasPicks = board.selectedPoints.length > 0 || board.selectedLines.length > 0;
   const emptyView = !!sketch && Object.keys(sketch.points).length === 0;
 
+  /** Straight lines get their length written beside them, like dimensions on a technical drawing. */
+  const dimensions = useMemo(() => {
+    if (!sketch || (!board.showSizes && board.selectedLines.length === 0)) return [];
+    const picked = new Set(board.selectedLines);
+    const lines = Object.values(sketch.lines);
+    const out: { id: string; x: number; y: number; angle: number; text: string; picked: boolean }[] = [];
+    for (const line of lines) {
+      const a = sketch.points[line.a];
+      const b = sketch.points[line.b];
+      const isPicked = picked.has(line.id);
+      if (!a || !b || (!isPicked && (!board.showSizes || a.smooth || b.smooth || lines.length > 240))) continue;
+      const [ax, ay] = toScreen(view, a.x, a.y);
+      const [bx, by] = toScreen(view, b.x, b.y);
+      const px = Math.hypot(bx - ax, by - ay);
+      if (px < (isPicked ? 8 : 46)) continue;
+      let angle = (Math.atan2(by - ay, bx - ax) * 180) / Math.PI;
+      if (angle > 90) angle -= 180;
+      if (angle < -90) angle += 180;
+      // Sit the label just off the line, on its upper side.
+      let nx = -(by - ay) / px;
+      let ny = (bx - ax) / px;
+      if (ny > 0 || (ny === 0 && nx > 0)) {
+        nx = -nx;
+        ny = -ny;
+      }
+      out.push({ id: line.id, x: (ax + bx) / 2 + nx * 11, y: (ay + by) / 2 + ny * 11, angle, text: metres(Math.hypot(b.x - a.x, b.y - a.y)), picked: isPicked });
+    }
+    return out;
+  }, [sketch, view, board.showSizes, board.selectedLines]);
+
   const hint = (() => {
+    if (locked) return 'This drawing is locked. Unlock it to change it; you can still pan and zoom.';
+    if (measure) return 'Type the length in metres. Tab switches to the angle (0° points right, 90° up). Enter places the dot.';
     if (board.adjustingReference) return 'Drag to move the picture. Set its width in the Pictures panel. Press Done when it lines up.';
     if (board.tool === 'rectangle') return 'Drag to draw a rectangle. Hold Shift for a square.';
     if (board.tool === 'circle') return `Drag from the centre to draw a circle with ${board.circleSides} sides.`;
-    if (board.tool === 'select') return 'Click or drag a box to pick dots. Drag to move them. S makes them smooth or sharp. Delete removes. Shift adds to the pick.';
+    if (board.tool === 'select') return 'Click or drag a box to pick dots. Drag to move them. Shift adds to the pick. Ctrl+A picks every dot.';
     if (!drawing) return 'Click anywhere to place the first dot of a new blueprint.';
-    if (chainPoint) return 'Click to add the next dot. Click the first dot to close the shape. Esc, Enter or right-click stops. Backspace steps back.';
+    if (chainPoint) return 'Click to add the next dot, or type a length. Click the first dot to close the shape. Esc, Enter or right-click stops.';
     if (isBody && drawing.view) return VIEW_HELP[drawing.view];
     if (revolveAxis === 'vertical') return 'Draw the right half of a profile: it spins around the orange axis.';
     if (revolveAxis === 'horizontal') return 'Draw the profile above the orange line: it spins around it, like a wheel on its axle.';
@@ -801,6 +895,15 @@ export function SketchBoard() {
           <span className="button-label">Pictures</span>
           {references.filter((r) => r.plane === plane).length > 0 && <span className="badge">{references.filter((r) => r.plane === plane).length}</span>}
         </button>
+        <button
+          type="button"
+          className={`icon-button ${board.showSizes ? 'is-active' : ''}`}
+          aria-pressed={board.showSizes}
+          onClick={() => boardStore.set({ showSizes: !board.showSizes })}
+          title={board.showSizes ? 'Hide line sizes' : 'Show line sizes'}
+        >
+          <Icon name="ruler" />
+        </button>
         <div className="snap-control" title="Snap dots to the board grid">
           <button
             type="button"
@@ -828,51 +931,6 @@ export function SketchBoard() {
       </header>
 
       <div className="board-body">
-        <div className="tool-rail" role="toolbar" aria-orientation="vertical" aria-label="Board tools">
-          {TOOLS.map((item) => (
-            <button
-              key={item.tool}
-              type="button"
-              className={`rail-button ${board.tool === item.tool ? 'is-active' : ''}`}
-              aria-pressed={board.tool === item.tool}
-              onClick={() => boardStore.setTool(item.tool)}
-              title={`${item.label} (${item.key})`}
-            >
-              <Icon name={item.icon} size={18} />
-            </button>
-          ))}
-          <span className="rail-separator" />
-          <button type="button" className="rail-button" onClick={() => actions.toggleSmoothPicked()} disabled={!hasPicks} title="Make picked dots smooth or sharp (S)">
-            <Icon name="smooth" size={18} />
-          </button>
-          <button
-            type="button"
-            className={`rail-button ${drawing?.mirror && !revolveAxis ? 'is-active' : ''}`}
-            aria-pressed={!!drawing?.mirror}
-            onClick={actions.toggleMirror}
-            disabled={!drawing || (isBody && drawing.view === 'side')}
-            title={isBody ? 'Symmetric: draw the right half of the top and front views (M)' : 'Mirror: draw one half, get both (M)'}
-          >
-            <Icon name="mirror" size={18} />
-          </button>
-          <button
-            type="button"
-            className="rail-button"
-            onClick={() => actions.deleteBoardSelection()}
-            disabled={!hasPicks}
-            title="Delete picked dots and lines (Delete)"
-          >
-            <Icon name="trash" size={18} />
-          </button>
-          <span className="rail-separator" />
-          <button type="button" className="rail-button" onClick={() => actions.startNewBlueprint()} title="New blueprint">
-            <Icon name="plus" size={18} />
-          </button>
-          <button type="button" className="rail-button" onClick={actions.createBody} title="New body from side, top and front views (car bodies, hulls)">
-            <Icon name="car" size={18} />
-          </button>
-        </div>
-
         <div
           ref={hostRef}
           className={`board-canvas tool-${board.tool} ${panning ? 'is-panning' : ''} ${panReady ? 'is-pan-ready' : ''} ${board.adjustingReference ? 'is-adjusting' : ''}`}
@@ -896,19 +954,6 @@ export function SketchBoard() {
             onContextMenu={(event) => event.preventDefault()}
             onDoubleClick={() => boardStore.set({ chainFrom: null })}
           >
-            <defs>
-              {/* The light-table glow around the ink: a soft halo under the crisp line. */}
-              <filter id="board-glow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="2.4" result="blur" />
-                <feComponentTransfer in="blur" result="halo">
-                  <feFuncA type="linear" slope="0.95" />
-                </feComponentTransfer>
-                <feMerge>
-                  <feMergeNode in="halo" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
             {planeReferences.map((reference) => {
               const h = reference.width * reference.aspect;
               const [left, top] = s(reference.x - reference.width / 2, reference.y + h / 2);
@@ -998,7 +1043,7 @@ export function SketchBoard() {
               <path key={i} className="board-ghost" d={pathOf(points.map(([x, y]) => s(x, y)), false)} />
             ))}
 
-            <g className="board-ink" filter="url(#board-glow)">
+            <g className="board-ink">
               {sketch &&
                 Object.values(sketch.lines).map((line) => {
                   const points = linePaths.get(line.id);
@@ -1008,16 +1053,29 @@ export function SketchBoard() {
                 })}
             </g>
 
+            {dimensions.length > 0 && (
+              <g className="board-dims" aria-hidden="true">
+                {dimensions.map((dim) => (
+                  <text key={dim.id} className={`board-dim ${dim.picked ? 'is-picked' : ''}`} transform={`translate(${dim.x.toFixed(1)} ${dim.y.toFixed(1)}) rotate(${dim.angle.toFixed(1)})`}>
+                    {dim.text}
+                  </text>
+                ))}
+              </g>
+            )}
+
             {preview?.kind === 'shape' && <path className="board-preview" d={pathOf(preview.points.map(([x, y]) => s(x, y)), true)} />}
 
-            {chainPoint && hover && showCursor && (
+            {chainPoint && rubberEnd && (
               <line
-                className="board-rubber"
+                className={`board-rubber ${typedTarget ? 'is-typed' : ''}`}
                 x1={s(chainPoint.x, chainPoint.y)[0]}
                 y1={s(chainPoint.x, chainPoint.y)[1]}
-                x2={s(hover.x, hover.y)[0]}
-                y2={s(hover.x, hover.y)[1]}
+                x2={s(rubberEnd[0], rubberEnd[1])[0]}
+                y2={s(rubberEnd[0], rubberEnd[1])[1]}
               />
+            )}
+            {typedTarget && (
+              <rect className="board-typed-dot" x={s(typedTarget[0], typedTarget[1])[0] - 4.5} y={s(typedTarget[0], typedTarget[1])[1] - 4.5} width={9} height={9} rx={1.5} />
             )}
 
             {hover && showCursor && hover.guideX !== null && (
@@ -1054,8 +1112,8 @@ export function SketchBoard() {
               </g>
             )}
 
-            {drawingLength !== null && hover && showCursor && drawingLength > 0 && (
-              <text className="board-length" x={s(hover.x, hover.y)[0] + 14} y={s(hover.x, hover.y)[1] - 12}>
+            {drawingLength !== null && rubberEnd && !measure && drawingLength > 0 && (
+              <text className="board-length" x={s(rubberEnd[0], rubberEnd[1])[0] + 14} y={s(rubberEnd[0], rubberEnd[1])[1] - 12}>
                 {metres(drawingLength)} m
               </text>
             )}
@@ -1065,6 +1123,38 @@ export function SketchBoard() {
             )}
           </svg>
 
+          <div className="tool-dock" role="toolbar" aria-orientation="vertical" aria-label="Board tools">
+            {TOOLS.map((item) => (
+              <button
+                key={item.tool}
+                type="button"
+                className={`dock-button ${board.tool === item.tool ? 'is-active' : ''}`}
+                aria-pressed={board.tool === item.tool}
+                onClick={() => boardStore.setTool(item.tool)}
+                title={`${item.label} (${item.key})`}
+              >
+                <Icon name={item.icon} size={18} />
+              </button>
+            ))}
+            <span className="dock-separator" />
+            <button
+              type="button"
+              className={`dock-button ${drawing?.mirror && !revolveAxis ? 'is-active' : ''}`}
+              aria-pressed={!!drawing?.mirror}
+              onClick={actions.toggleMirror}
+              disabled={!drawing || locked || (isBody && drawing.view === 'side')}
+              title={isBody ? 'Symmetric: draw the right half of the top and front views (M)' : 'Mirror: draw one half, get both (M)'}
+            >
+              <Icon name="mirror" size={18} />
+            </button>
+            <span className="dock-separator" />
+            <button type="button" className="dock-button" onClick={() => actions.startNewBlueprint()} title="New blueprint">
+              <Icon name="plus" size={18} />
+            </button>
+            <button type="button" className="dock-button" onClick={actions.createBody} title="New body from side, top and front views (car bodies, hulls)">
+              <Icon name="car" size={18} />
+            </button>
+          </div>
           <div className="board-caption">
             <span>
               {isBody && drawing?.view ? `${object?.name}, ` : ''}
@@ -1094,6 +1184,33 @@ export function SketchBoard() {
           )}
 
           {board.referencesOpen && <ReferencePanel plane={plane} />}
+
+          {drawing && hasPicks && board.tool === 'select' && (
+            <SelectionBar drawing={drawing} points={board.selectedPoints} lines={board.selectedLines} locked={locked} />
+          )}
+
+          {measure && chainPoint && (
+            <MeasureEntry
+              draft={measure}
+              x={Math.min(width - 250, Math.max(8, (rubberEnd ? s(rubberEnd[0], rubberEnd[1])[0] : s(chainPoint.x, chainPoint.y)[0]) + 18))}
+              y={Math.min(height - 120, Math.max(8, (rubberEnd ? s(rubberEnd[0], rubberEnd[1])[1] : s(chainPoint.x, chainPoint.y)[1]) + 14))}
+              onChange={setMeasure}
+              onSubmit={submitMeasure}
+              onCancel={() => setMeasure(null)}
+            />
+          )}
+
+          {locked && object && (
+            <div className="board-locked">
+              <Icon name="lock" size={14} />
+              <span>{object.name} is locked</span>
+              {object.locked && (
+                <button type="button" className="text-button is-small" onClick={() => actions.toggleLock(object.id)}>
+                  Unlock
+                </button>
+              )}
+            </div>
+          )}
 
           {!drawing && (
             <div className="board-empty">

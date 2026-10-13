@@ -1,9 +1,42 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ask, open, save } from '@tauri-apps/plugin-dialog';
+import { hasForgexEntry, mergeClaudeDesktopConfig, relayServerEntry } from '../core/ai/claudeConfig';
 import { fileNameFromPath } from '../core/project/paths';
 import { PROJECT_EXTENSION } from '../core/project/projectFile';
-import type { PlatformFiles } from './files';
+import { DesktopLibrary } from './desktopLibrary';
+import { copyTextToClipboard, type AiSetup, type AiSetupStatus, type ClaudeConfigFile, type PlatformFiles } from './files';
+
+interface RawAiStatus {
+  appPath: string;
+  claudeConfigs: ClaudeConfigFile[];
+  projects: string;
+}
+
+const aiSetup: AiSetup = {
+  async status(): Promise<AiSetupStatus> {
+    const raw = await invoke<RawAiStatus>('ai_status');
+    let connected = false;
+    for (const config of raw.claudeConfigs.filter((c) => c.exists)) {
+      const text = await invoke<string | null>('ai_read_claude_config', { path: config.path }).catch(() => null);
+      if (hasForgexEntry(text, raw.appPath)) connected = true;
+    }
+    return { ...raw, connected };
+  },
+
+  async connectClaudeDesktop() {
+    const raw = await invoke<RawAiStatus>('ai_status');
+    const entry = relayServerEntry(raw.appPath);
+    const configs = [];
+    for (const config of raw.claudeConfigs) {
+      const existing = await invoke<string | null>('ai_read_claude_config', { path: config.path });
+      const merged = mergeClaudeDesktopConfig(existing, entry);
+      const backup = merged.changed ? await invoke<string | null>('ai_write_claude_config', { path: config.path, contents: merged.text }) : null;
+      configs.push({ path: config.path, packaged: config.packaged, backup, changed: merged.changed });
+    }
+    return { entry, configs };
+  },
+};
 
 const FILTERS = [{ name: 'FORGEX 3D project', extensions: [PROJECT_EXTENSION] }];
 const EXPORT_FILTERS = [{ name: 'glTF binary model (Blender, Roblox)', extensions: ['glb'] }];
@@ -83,5 +116,19 @@ export function createDesktopFiles(): PlatformFiles {
         unlisten?.();
       };
     },
+
+    library: new DesktopLibrary(),
+
+    async folders() {
+      return invoke<{ projects: string; library: string }>('forgex_paths');
+    },
+
+    async reveal(path) {
+      await invoke('open_in_explorer', { path });
+    },
+
+    copyText: copyTextToClipboard,
+
+    ai: aiSetup,
   };
 }

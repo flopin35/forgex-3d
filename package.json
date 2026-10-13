@@ -1,7 +1,7 @@
 {
   "name": "forgex-3d",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "FORGEX 3D: a personal Windows 3D modelling studio for game assets.",
   "type": "module",
   "scripts": {
@@ -16,7 +16,9 @@
     "mcp": "node mcp/forgex-mcp.cjs",
     "tauri": "tauri",
     "desktop": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:build": "tauri build",
+    "mcp:bundle": "node scripts/bundle-mcp.mjs",
+    "mcp:tools": "UPDATE_MCP_TOOLS=1 vitest run src/core/automation/mcpTools.test.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.2.0",

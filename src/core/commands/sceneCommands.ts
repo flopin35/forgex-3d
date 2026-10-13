@@ -133,6 +133,55 @@ export class SetVisibilityCommand implements Command {
   }
 }
 
+export class SetLockCommand implements Command {
+  readonly label: string;
+  private before = false;
+
+  constructor(
+    private readonly id: string,
+    private readonly locked: boolean,
+    name: string,
+  ) {
+    this.label = `${locked ? 'Lock' : 'Unlock'} ${name}`;
+  }
+
+  private write(scene: Scene, locked: boolean): Scene {
+    return updateObject(scene, this.id, (o) => {
+      const { locked: _old, ...rest } = o;
+      void _old;
+      return (locked ? { ...rest, locked: true } : rest) as SceneObject;
+    });
+  }
+
+  apply(scene: Scene): Scene {
+    this.before = !!requireObject(scene, this.id).locked;
+    return this.write(scene, this.locked);
+  }
+
+  revert(scene: Scene): Scene {
+    return this.write(scene, this.before);
+  }
+}
+
+/** Swaps the whole scene for another one (restoring a snapshot). Undo brings the previous scene back. */
+export class ReplaceSceneCommand implements Command {
+  readonly selectAfterApply = null;
+
+  constructor(
+    private readonly before: Scene,
+    private readonly after: Scene,
+    readonly label: string,
+  ) {}
+
+  apply(): Scene {
+    return this.after;
+  }
+
+  revert(): Scene {
+    return this.before;
+  }
+}
+
 function requireMesh(scene: Scene, id: string): MeshObject {
   const object = requireObject(scene, id);
   if (object.kind !== 'mesh') throw new SceneError(`${object.name} is not a mesh.`);

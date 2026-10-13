@@ -5,6 +5,7 @@ import type { Transform } from '../math/transform';
 import { createDefaultDocument } from '../project/defaultDocument';
 import type { CameraState, ProjectDocument, ProjectSettings } from '../project/projectFile';
 import type { ReferenceImage } from '../project/references';
+import type { Snapshot } from '../project/snapshots';
 import { setObjectTransform, updateObject } from '../scene/scene';
 import { isConstructionMesh, type MeshSource, type Scene } from '../scene/types';
 
@@ -18,6 +19,8 @@ export interface DiagnosticMessage {
   text: string;
   detail?: string;
   time: number;
+  /** Kept in the activity list but not shown as a pop-up (routine AI tool reports). */
+  quiet?: boolean;
 }
 
 export interface HistoryItem {
@@ -54,6 +57,8 @@ export interface EditorState {
   settings: ProjectSettings;
   /** Pictures to trace over on the board (saved in the project). */
   references: readonly ReferenceImage[];
+  /** Saved versions of the scene (saved in the project, not part of undo). */
+  snapshots: readonly Snapshot[];
   project: ProjectInfo;
   history: HistorySummary;
   /** `revision` changes whenever a loaded project asks the viewport to apply a camera view. */
@@ -131,6 +136,7 @@ export class EditorStore {
       tool: this.state?.tool ?? 'select',
       settings: { ...document.settings },
       references: document.references ?? [],
+      snapshots: document.snapshots ?? [],
       project: { name, path, savedRevision: this.history.revision, settingsDirty: false },
       history: this.summarizeHistory(),
       camera: { view: document.camera, revision: cameraRevision + 1 },
@@ -273,6 +279,12 @@ export class EditorStore {
     this.commit({ references, project: { ...this.state.project, settingsDirty: true } });
   }
 
+  /** Replaces the snapshots. They are saved with the project but are not part of undo. */
+  setSnapshots(snapshots: readonly Snapshot[]): void {
+    if (snapshots === this.state.snapshots) return;
+    this.commit({ snapshots, project: { ...this.state.project, settingsDirty: true } });
+  }
+
   setCameraView(view: CameraState): void {
     this.state = { ...this.state, camera: { ...this.state.camera, view } };
   }
@@ -293,22 +305,23 @@ export class EditorStore {
     savedRevision: number,
     savedSettings: ProjectSettings,
     savedReferences: readonly ReferenceImage[] = this.state.references,
+    savedSnapshots: readonly Snapshot[] = this.state.snapshots,
   ): void {
-    this.commit({
-      project: { name, path, savedRevision, settingsDirty: this.state.settings !== savedSettings || this.state.references !== savedReferences },
-    });
+    const settingsDirty = this.state.settings !== savedSettings || this.state.references !== savedReferences || this.state.snapshots !== savedSnapshots;
+    this.commit({ project: { name, path, savedRevision, settingsDirty } });
   }
 
   toDocument(): ProjectDocument {
     const document: ProjectDocument = { scene: this.state.scene, settings: this.state.settings, camera: this.state.camera.view };
     if (this.state.references.length) document.references = this.state.references;
+    if (this.state.snapshots.length) document.snapshots = this.state.snapshots;
     return document;
   }
 
   // -- Diagnostics ------------------------------------------------------------
 
-  log(level: MessageLevel, text: string, detail?: string): void {
-    const message: DiagnosticMessage = { id: ++this.messageSeq, level, text, detail, time: Date.now() };
+  log(level: MessageLevel, text: string, detail?: string, options: { quiet?: boolean } = {}): void {
+    const message: DiagnosticMessage = { id: ++this.messageSeq, level, text, detail, time: Date.now(), ...(options.quiet ? { quiet: true } : {}) };
     this.commit({ messages: [...this.state.messages, message].slice(-MAX_MESSAGES) });
   }
 

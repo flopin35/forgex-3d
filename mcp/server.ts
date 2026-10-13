@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
+import { SERVER_INSTRUCTIONS } from '../src/core/automation/instructions';
 import { hasTool, isReadOnlyTool, runTool, TOOL_SPECS } from '../src/core/automation/tools';
 import { ToolError, type ToolOutput } from '../src/core/automation/toolTypes';
 import { APP_NAME, APP_VERSION } from '../src/core/version';
@@ -12,14 +13,7 @@ import type { FileHost } from './fileHost';
 export const SUPPORTED_PROTOCOL_VERSIONS = ['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25'];
 export const LATEST_PROTOCOL_VERSION = '2025-11-25';
 
-export const SERVER_INSTRUCTIONS = [
-  'FORGEX 3D is a 3D modelling studio for game assets (Roblox, Blender).',
-  'Units are metres, +Y is up, the front of an asset faces +Z, and rotations are degrees applied in X, Y, Z order. For Roblox, 1 stud = 0.28 m.',
-  'Model by giving points and connecting them: create_point_mesh builds a mesh from vertices and edges (faces come from closed loops), and edit_point_mesh refines it.',
-  'Use add_part for quick primitives and group_objects to organise parts. Every change can be undone.',
-  'Call get_status first. When the FORGEX 3D app is open, changes appear live in its viewport and capture_viewport returns an image to check your work.',
-  'When the app is closed, the server edits .forgex files directly: use save_project with a name (saved in the FORGEX projects folder) to keep work.',
-].join(' ');
+export { SERVER_INSTRUCTIONS };
 
 /** Tools that may wait on the user (an unsaved-changes prompt or a save dialog in the app). */
 const DIALOG_TOOLS = new Set(['new_project', 'open_project', 'save_project']);

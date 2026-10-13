@@ -46,6 +46,18 @@ export function isSelfOrAncestor(scene: Scene, ancestorId: string, id: string): 
   return false;
 }
 
+/** True when the object or any of its parents is locked. */
+export function isLocked(scene: Scene, id: string | null): boolean {
+  let current: string | null = id;
+  while (current !== null) {
+    const object: SceneObject | undefined = scene.objects[current];
+    if (!object) return false;
+    if (object.locked) return true;
+    current = object.parentId;
+  }
+  return false;
+}
+
 /** The object and all its descendants, parents before children. */
 export function collectSubtree(scene: Scene, id: string): SceneObject[] {
   const out: SceneObject[] = [];
@@ -252,4 +264,18 @@ export function sceneBounds(scene: Scene): [[number, number, number], [number, n
   };
   scene.rootIds.forEach((id) => visit(id, identityMatrix()));
   return min[0] <= max[0] ? [min, max] : null;
+}
+
+/**
+ * An x position for the root of new objects so they stand 1 m clear of everything
+ * already in the scene (to the right). The objects are measured where they are now.
+ */
+export function clearSpotX(scene: Scene, objects: readonly SceneObject[]): number {
+  const bounds = sceneBounds(scene);
+  if (!bounds || objects.length === 0) return 0;
+  const root = objects[0];
+  const probe = sceneBounds({ objects: Object.fromEntries(objects.map((o) => [o.id, o])), rootIds: [root.id] });
+  // How far the new objects reach left of their root's position.
+  const reachLeft = probe ? root.transform.position[0] - probe[0][0] : 0.5;
+  return Math.ceil(bounds[1][0] + 1 + reachLeft);
 }

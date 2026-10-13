@@ -139,6 +139,51 @@ const ICONS = {
       <circle cx="15.5" cy="9" r="1.6" />
     </>
   ),
+  ruler: <path d="M3.5 15.5 15.5 3.5l5 5-12 12Z M7 12l2 2 M9.8 9.2l1.6 1.6 M12.6 6.4l2 2" />,
+  lock: (
+    <>
+      <path d="M6.5 10.5h11v9h-11Z" />
+      <path d="M8.8 10.5V8a3.2 3.2 0 0 1 6.4 0v2.5" />
+    </>
+  ),
+  unlock: (
+    <>
+      <path d="M6.5 10.5h11v9h-11Z" />
+      <path d="M8.8 10.5V8a3.2 3.2 0 0 1 6.2-1.1" />
+    </>
+  ),
+  rotateLeft: <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3 M4.5 4v4.5H9" />,
+  rotateRight: <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3 M19.5 4v4.5H15" />,
+  flipH: <path d="M12 3.5v17 M9.5 7 4 17h5.5Z M14.5 7 20 17h-5.5Z" />,
+  flipV: <path d="M3.5 12h17 M7 9.5 17 4v5.5Z M7 14.5 17 20v-5.5Z" />,
+  alignLeft: <path d="M4.5 3.5v17 M8 7h11 M8 12h6 M8 17h9" />,
+  alignCentre: <path d="M12 3.5v17 M6.5 7h11 M9 12h6 M7.5 17h9" />,
+  alignRight: <path d="M19.5 3.5v17 M5 7h11 M10 12h6 M7 17h9" />,
+  alignTop: <path d="M3.5 4.5h17 M7 8v11 M12 8v6 M17 8v9" />,
+  alignMiddle: <path d="M3.5 12h17 M7 6.5v11 M12 9v6 M17 7.5v9" />,
+  alignBottom: <path d="M3.5 19.5h17 M7 5v11 M12 10v6 M17 7v9" />,
+  distributeH: <path d="M4 4v16 M20 4v16 M10 8v8 M14 8v8" />,
+  distributeV: <path d="M4 4h16 M4 20h16 M8 10h8 M8 14h8" />,
+  scaleDots: <path d="M4 4h5 M4 4v5 M20 20h-5 M20 20v-5 M4 4l6 6 M20 20l-6-6 M14 4h6v6 M4 14v6h6" />,
+  copy: <path d="M8.5 8.5h11v11h-11Z M15.5 8.5V4.5h-11v11h4" />,
+  paste: <path d="M8 4.5h8v3H8Z M6 6H4.5v14.5h15V6H18 M8 12h8 M8 16h5" />,
+  pulse: <path d="M3 12h4l2.5-6 4 12 2.5-6h5" />,
+  plug: <path d="M9 3.5v4 M15 3.5v4 M6.5 7.5h11v3a5.5 5.5 0 0 1-11 0Z M12 16v4.5" />,
+  library: <path d="M4.5 4.5h4v15h-4Z M10 4.5h4v15h-4Z M15.6 5.2l3.8-1 3.1 14.5-3.8 1Z" />,
+  versions: <path d="M12 7.5v4.8l3 1.8 M4.6 9.2A8 8 0 1 1 4 12 M4 5v4.5h4.5" />,
+  keyboard: <path d="M3 7h18v10H3Z M6.5 10h1 M10 10h1 M13.5 10h1 M17 10h.5 M7.5 14h9" />,
+  command: <path d="M9 9h6v6H9Z M9 9V6.5A2.5 2.5 0 1 0 6.5 9H9 M15 9V6.5A2.5 2.5 0 1 1 17.5 9H15 M9 15v2.5A2.5 2.5 0 1 1 6.5 15H9 M15 15v2.5a2.5 2.5 0 1 0 2.5-2.5H15" />,
+  dots: (
+    <>
+      <circle cx="6" cy="12" r="1.2" />
+      <circle cx="12" cy="12" r="1.2" />
+      <circle cx="18" cy="12" r="1.2" />
+    </>
+  ),
+  arrowRight: <path d="M5 12h14 M13 6l6 6-6 6" />,
+  external: <path d="M14 4.5h5.5V10 M19.5 4.5 11 13 M17 14v5.5H4.5V7H10" />,
+  upload: <path d="M12 15.5v-11 M7.5 9 12 4.5 16.5 9 M5 17v2.5h14V17" />,
+  sparkle: <path d="M12 3.5c.6 4 2.4 5.9 6.5 6.5-4.1.6-5.9 2.5-6.5 6.5-.6-4-2.4-5.9-6.5-6.5 4.1-.6 5.9-2.5 6.5-6.5Z M18.5 15.5c.3 1.6 1 2.3 2.5 2.5-1.5.3-2.2 1-2.5 2.5-.3-1.5-1-2.2-2.5-2.5 1.5-.2 2.2-.9 2.5-2.5Z" />,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof ICONS;
@@ -163,15 +208,14 @@ export function Icon({ name, size = 16, className }: { name: IconName; size?: nu
   );
 }
 
-/** The FORGEX 3D mark: an isometric cube with a forged notch cut from its top face. */
+/** The FORGEX 3D mark: an isometric cube in forge blue with a notch cut from its top face. */
 export function BrandMark({ size = 22 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-      <path d="M32 6 55 19.3 32 32.6 9 19.3Z" fill="#62cbff" />
-      <path d="M9 19.3 32 32.6V59L9 45.7Z" fill="#1c8fe6" />
-      <path d="M55 19.3 32 32.6V59l23-13.3Z" fill="#0b5aa6" />
-      <path d="M32 14.5 43 20.9 38.6 23.4 32 19.6 25.4 23.4 21 20.9Z" fill="#0a1422" opacity="0.85" />
-      <path d="M32 32.6V59" stroke="#0a1422" strokeOpacity="0.5" strokeWidth="1.2" />
+      <path d="M32 6 55 19.3 32 32.6 9 19.3Z" fill="#6c9dff" />
+      <path d="M9 19.3 32 32.6V59L9 45.7Z" fill="#1764f4" />
+      <path d="M55 19.3 32 32.6V59l23-13.3Z" fill="#0b3aa0" />
+      <path d="M32 14.5 43 20.9 38.6 23.4 32 19.6 25.4 23.4 21 20.9Z" fill="#141a22" />
     </svg>
   );
 }

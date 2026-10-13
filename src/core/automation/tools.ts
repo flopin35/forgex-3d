@@ -4,8 +4,10 @@ import {
   DeleteObjectCommand,
   MoveObjectCommand,
   RenameObjectCommand,
+  ReplaceSceneCommand,
   SetColorCommand,
   SetGraphCommand,
+  SetLockCommand,
   SetMeshLookCommand,
   SetSourceCommand,
   SetTransformCommand,
@@ -27,11 +29,13 @@ import {
 import { fillClosedLoops } from '../geometry/loops';
 import { cleanModifiers, hasModifiers, MAX_SUBDIVISION, MIRROR_AXES, NO_MODIFIERS } from '../geometry/modifiers';
 import { orientFaces } from '../geometry/orientation';
-import { createObjectId } from '../ids';
+import { createObjectId, randomId } from '../ids';
+import { findLibraryEntry, instantiateLibraryPart, libraryPartFromScene, type LibraryStore } from '../library/libraryPart';
+import { addSnapshot, createSnapshot, nextSnapshotName } from '../project/snapshots';
 import { cleanTransform, decomposeMatrix, identityTransform, type Transform } from '../math/transform';
 import { add, cleanVec3, type Vec3 } from '../math/vec3';
 import { BLUEPRINT_COLORS, PARTS, createBlueprintObject, createBodyObject, createPartObject, getPart, type PartId } from '../scene/parts';
-import { cloneSubtree, indexInParent, isSelfOrAncestor, uniqueName, worldMatrix } from '../scene/scene';
+import { clearSpotX, cloneSubtree, indexInParent, isLocked, isSelfOrAncestor, uniqueName, worldMatrix } from '../scene/scene';
 import { createTemplate, getTemplate, TEMPLATES, type TemplateId } from '../scene/templates';
 import { isBodyMesh, isConstructionMesh, isSketchMesh, meshGraphOf, sourceGraphOf, type MeshObject, type MeshSource, type Scene, type SceneObject } from '../scene/types';
 import { BODY_LIMITS, BODY_VIEWS, clampBody, createBodyViews, DEFAULT_BODY, generateBody, type BodySettings, type BodyView, type BodyViews } from '../sketch/body';
@@ -139,6 +143,11 @@ function sceneOf(ctx: ToolContext): Scene {
   return ctx.store.getState().scene;
 }
 
+function libraryOf(ctx: ToolContext): LibraryStore {
+  if (!ctx.host.library) throw new ToolError('My Parts is not available here.');
+  return ctx.host.library;
+}
+
 /** Runs a command through the editor (so it is undoable) or reports why it failed. */
 function apply(ctx: ToolContext, command: Command): void {
   if (ctx.store.execute(command)) return;
@@ -162,6 +171,15 @@ export function resolveObject(scene: Scene, ref: unknown, label = 'object'): Sce
     throw new ToolError(`"${key}" matches ${matches.length} objects. Use an id instead: ${matches.map((o) => o.id).join(', ')}.`);
   }
   throw new ToolError(`No object is called "${key}". Use list_objects to see ids and names.`);
+}
+
+/** Stops edits to a locked object (or one inside a locked group) with a clear way out. */
+function unlocked<T extends SceneObject>(scene: Scene, object: T): T {
+  if (isLocked(scene, object.id)) {
+    const where = object.locked ? `${object.name} is locked` : `${object.name} is inside a locked group`;
+    throw new ToolError(`${where}, so it cannot be changed. Ask the user first, then call set_lock with locked false on it.`);
+  }
+  return object;
 }
 
 function resolveConstruction(scene: Scene, ref: unknown): ConstructionMesh {
@@ -284,6 +302,7 @@ function describe(object: SceneObject): Record<string, unknown> {
     if (hasModifiers(object.modifiers)) out.modifiers = object.modifiers;
   }
   if (!object.visible) out.hidden = true;
+  if (object.locked) out.locked = true;
   return out;
 }
 
@@ -635,7 +654,7 @@ const TOOLS: ToolDefinition[] = [
     },
     annotations: edit,
     run(args, ctx) {
-      const object = resolveConstruction(sceneOf(ctx), args.object);
+      const object = unlocked(sceneOf(ctx), resolveConstruction(sceneOf(ctx), args.object));
       const before = object.source.graph;
       let graph = before;
       const allowNonPlanar = optBool(args, 'allow_non_planar') ?? false;
@@ -863,7 +882,7 @@ const TOOLS: ToolDefinition[] = [
     },
     annotations: edit,
     run(args, ctx) {
-      const object = resolveDrawn(sceneOf(ctx), args.object);
+      const object = unlocked(sceneOf(ctx), resolveDrawn(sceneOf(ctx), args.object));
       const before = object.source;
       const view = optEnum(args, 'view', BODY_VIEWS) as BodyView | undefined;
       if (before.type === 'body' && !view) throw new ToolError(`${object.name} is a body: say which drawing to edit with view (side, top or front).`);
@@ -1036,7 +1055,7 @@ const TOOLS: ToolDefinition[] = [
     },
     annotations: edit,
     run(args, ctx) {
-      const object = resolveObject(sceneOf(ctx), args.object);
+      const object = unlocked(sceneOf(ctx), resolveObject(sceneOf(ctx), args.object));
       if (object.kind !== 'mesh') throw new ToolError(`${object.name} is a group; modifiers work on meshes.`);
       const current = object.modifiers ?? NO_MODIFIERS;
       const modifiers = cleanModifiers({
@@ -1065,7 +1084,7 @@ const TOOLS: ToolDefinition[] = [
     inputSchema: { type: 'object', properties: { object: objectRef() }, required: ['object'], additionalProperties: false },
     annotations: edit,
     run(args, ctx) {
-      const object = resolveDrawn(sceneOf(ctx), args.object);
+      const object = unlocked(sceneOf(ctx), resolveDrawn(sceneOf(ctx), args.object));
       const graph = sourceGraphOf(object)!;
       apply(ctx, new SetSourceCommand(object.id, object.source, { type: 'construction', graph }, `AI: convert ${object.name} to points`));
       const counts = analyzeGraph(graph);
@@ -1084,7 +1103,7 @@ const TOOLS: ToolDefinition[] = [
     },
     annotations: { ...edit, idempotentHint: true },
     run(args, ctx) {
-      const object = resolveObject(sceneOf(ctx), args.object);
+      const object = unlocked(sceneOf(ctx), resolveObject(sceneOf(ctx), args.object));
       if (args.position === undefined && args.rotation === undefined && args.scale === undefined) {
         throw new ToolError('Give at least one of position, rotation or scale.');
       }
@@ -1100,7 +1119,7 @@ const TOOLS: ToolDefinition[] = [
     inputSchema: { type: 'object', properties: { object: objectRef(), color }, required: ['object', 'color'], additionalProperties: false },
     annotations: { ...edit, idempotentHint: true },
     run(args, ctx) {
-      const object = resolveObject(sceneOf(ctx), args.object);
+      const object = unlocked(sceneOf(ctx), resolveObject(sceneOf(ctx), args.object));
       if (object.kind !== 'mesh') throw new ToolError(`${object.name} is a group and has no colour.`);
       const value = optColor(args, 'color')!;
       if (!value) throw new ToolError('color is required.');
@@ -1148,7 +1167,7 @@ const TOOLS: ToolDefinition[] = [
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     run(args, ctx) {
       const scene = sceneOf(ctx);
-      const object = resolveObject(scene, args.object);
+      const object = unlocked(scene, resolveObject(scene, args.object));
       const count = Object.values(scene.objects).filter((o) => isSelfOrAncestor(scene, object.id, o.id)).length;
       apply(ctx, new DeleteObjectCommand(object.id, object.name));
       return result(`Deleted ${object.name}${count > 1 ? ` and ${count - 1} child object${count === 2 ? '' : 's'}` : ''}. undo brings it back.`);
@@ -1196,7 +1215,7 @@ const TOOLS: ToolDefinition[] = [
     annotations: edit,
     run(args, ctx) {
       const scene = sceneOf(ctx);
-      const object = resolveObject(scene, args.object);
+      const object = unlocked(scene, resolveObject(scene, args.object));
       const parentId = parentFromArgs(scene, args);
       if (parentId !== null && isSelfOrAncestor(scene, object.id, parentId)) {
         throw new ToolError(`${object.name} cannot go inside itself or one of its children.`);
@@ -1251,6 +1270,162 @@ const TOOLS: ToolDefinition[] = [
       const object = resolveObject(sceneOf(ctx), args.object);
       ctx.store.select(object.id);
       return result(`Selected ${object.name}.`);
+    },
+  },
+  {
+    name: 'set_lock',
+    title: 'Lock or unlock object',
+    description:
+      'Locks an object so it cannot be picked in the 3D view, moved, edited or deleted (by the user or by these tools) until it is unlocked. Use it to protect finished parts. Locking a group protects everything inside it.',
+    inputSchema: {
+      type: 'object',
+      properties: { object: objectRef(), locked: { type: 'boolean' } },
+      required: ['object', 'locked'],
+      additionalProperties: false,
+    },
+    annotations: { ...edit, idempotentHint: true },
+    run(args, ctx) {
+      const object = resolveObject(sceneOf(ctx), args.object);
+      const locked = optBool(args, 'locked');
+      if (locked === undefined) throw new ToolError('locked must be true or false.');
+      if (!!object.locked === locked) return result(`${object.name} is already ${locked ? 'locked' : 'unlocked'}.`);
+      apply(ctx, new SetLockCommand(object.id, locked, object.name));
+      return result(`${object.name} is now ${locked ? 'locked' : 'unlocked'}.`);
+    },
+  },
+  {
+    name: 'list_snapshots',
+    title: 'List snapshots',
+    description: 'Lists the saved versions (snapshots) stored in this project, oldest first, with their ids, names, dates and object counts.',
+    inputSchema: noArgs,
+    annotations: readOnly,
+    run(_args, ctx) {
+      const snapshots = ctx.store.getState().snapshots;
+      if (snapshots.length === 0) return result('This project has no snapshots yet. save_snapshot takes one.');
+      return result(
+        `${snapshots.length} snapshot${snapshots.length === 1 ? '' : 's'}:`,
+        snapshots.map((snapshot) => ({ id: snapshot.id, name: snapshot.name, createdAt: snapshot.createdAt, objects: Object.keys(snapshot.scene.objects).length })),
+      );
+    },
+  },
+  {
+    name: 'save_snapshot',
+    title: 'Save snapshot',
+    description:
+      'Saves the whole scene as a named version inside the project, to come back to with restore_snapshot. Take one before a big or risky change. Projects keep the latest 40.',
+    inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Name such as "Before new wheels" (default "Version N")' } }, additionalProperties: false },
+    annotations: edit,
+    run(args, ctx) {
+      const state = ctx.store.getState();
+      const name = optString(args, 'name', 120) ?? nextSnapshotName(state.snapshots);
+      const snapshot = createSnapshot(state.scene, name, randomId('snap'));
+      ctx.store.setSnapshots(addSnapshot(state.snapshots, snapshot));
+      return result(`Saved snapshot “${snapshot.name}” (${snapshot.id}) with ${Object.keys(snapshot.scene.objects).length} objects.`);
+    },
+  },
+  {
+    name: 'restore_snapshot',
+    title: 'Restore snapshot',
+    description: 'Replaces the scene with a saved snapshot. This is one undoable change: undo brings back the scene as it was before.',
+    inputSchema: { type: 'object', properties: { snapshot: { type: 'string', description: 'Snapshot id or exact name' } }, required: ['snapshot'], additionalProperties: false },
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    run(args, ctx) {
+      const ref = reqString(args, 'snapshot', 200).trim();
+      const state = ctx.store.getState();
+      const snapshot =
+        state.snapshots.find((s) => s.id === ref) ??
+        state.snapshots.find((s) => s.name === ref) ??
+        state.snapshots.find((s) => s.name.toLowerCase() === ref.toLowerCase());
+      if (!snapshot) throw new ToolError(`No snapshot is called "${ref}". Use list_snapshots to see them.`);
+      apply(ctx, new ReplaceSceneCommand(state.scene, snapshot.scene, `Restore ${snapshot.name}`));
+      return result(`Restored “${snapshot.name}” (${Object.keys(snapshot.scene.objects).length} objects). undo returns to the scene before.`);
+    },
+  },
+  {
+    name: 'list_library',
+    title: 'List My Parts',
+    description:
+      'Lists the reusable parts in My Parts, the shared library every FORGEX project can use (on Windows: Documents\\FORGEX 3D\\Library). Parts saved here in one project can be added to any other with add_from_library.',
+    inputSchema: noArgs,
+    annotations: readOnly,
+    async run(_args, ctx) {
+      const library = libraryOf(ctx);
+      const entries = await library.list();
+      if (entries.length === 0) return result(`My Parts is empty (${library.location()}). save_to_library adds an object.`);
+      return result(
+        `${entries.length} part${entries.length === 1 ? '' : 's'} in My Parts (${library.location()}):`,
+        entries.map((entry) => ({ name: entry.name, file: entry.file, objects: entry.objectCount, ...(entry.description ? { description: entry.description } : {}) })),
+      );
+    },
+  },
+  {
+    name: 'save_to_library',
+    title: 'Save to My Parts',
+    description:
+      'Saves an object and everything inside it to My Parts, so it can be reused in any project. The saved copy stands at the origin; the object in this scene is not changed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        object: objectRef(),
+        name: { type: 'string', description: 'Part name (default: the object name)' },
+        description: { type: 'string', description: 'A short note on what the part is for' },
+        overwrite: { type: 'boolean', description: 'Replace a part with the same name (default false)' },
+      },
+      required: ['object'],
+      additionalProperties: false,
+    },
+    annotations: edit,
+    async run(args, ctx) {
+      const library = libraryOf(ctx);
+      const object = resolveObject(sceneOf(ctx), args.object);
+      const part = libraryPartFromScene(sceneOf(ctx), object.id, { name: optString(args, 'name', 120), description: optString(args, 'description', 500) });
+      try {
+        const file = await library.write(part, optBool(args, 'overwrite') ?? false);
+        return result(`Saved ${part.name} to My Parts as ${file} (${Object.keys(part.scene.objects).length} objects).`);
+      } catch (error) {
+        throw new ToolError(error instanceof Error ? error.message : String(error));
+      }
+    },
+  },
+  {
+    name: 'add_from_library',
+    title: 'Add from My Parts',
+    description: 'Adds a copy of a part from My Parts to the scene, with new ids. Without a position it is placed clear of the existing objects.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        part: { type: 'string', description: 'Part name or file name from list_library' },
+        position: vec3('Where to put it, in metres (default: beside the scene)'),
+        parent: { type: ['string', 'null'], description: 'Optional parent object id or name' },
+      },
+      required: ['part'],
+      additionalProperties: false,
+    },
+    annotations: edit,
+    async run(args, ctx) {
+      const library = libraryOf(ctx);
+      const ref = reqString(args, 'part', 200);
+      const entry = findLibraryEntry(await library.list(), ref);
+      if (!entry) throw new ToolError(`My Parts has no part called "${ref}". Use list_library to see them.`);
+      let part;
+      try {
+        part = await library.read(entry.file);
+      } catch (error) {
+        throw new ToolError(error instanceof Error ? error.message : String(error));
+      }
+      const scene = sceneOf(ctx);
+      const objects = instantiateLibraryPart(part, createObjectId);
+      const position = optVec3(args, 'position');
+      const parentId = parentFromArgs(scene, args);
+      const root = objects[0];
+      const [, y, z] = root.transform.position;
+      objects[0] = {
+        ...root,
+        name: uniqueName(scene, part.name),
+        transform: cleanTransform({ ...root.transform, position: position ?? [parentId ? 0 : clearSpotX(scene, objects), y, z] }),
+      };
+      apply(ctx, new AddObjectsCommand(objects, parentId, undefined, `AI: add ${part.name} from My Parts`));
+      return result(`Added ${objects[0].name} (${objects[0].id}) from My Parts${objects.length > 1 ? ` with ${objects.length - 1} children` : ''}.`, describe(objects[0]));
     },
   },
   {

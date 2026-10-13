@@ -20,16 +20,29 @@ function dropZone(event: DragEvent<HTMLElement>): DropPosition {
 
 const DRAG_TYPE = 'application/x-forgex-object';
 
+/** The parts list: every object as a tree, with hide and lock on each row. */
 export function HierarchyPanel() {
   const actions = useActions();
   const scene = useEditor((s) => s.scene);
   const selectedId = useEditor((s) => s.selectedId);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
   const cancelRename = useRef(false);
   const [dropTarget, setDropTarget] = useState<{ id: string | null; position: DropPosition } | null>(null);
 
-  const rows = useMemo(() => flattenTree(scene, collapsed), [scene, collapsed]);
+  const rows = useMemo(() => {
+    const all = flattenTree(scene, filter.trim() ? new Set() : collapsed);
+    const query = filter.trim().toLowerCase();
+    if (!query) return all;
+    // Keep matches and the groups they sit in, so the tree still reads correctly.
+    const keep = new Set<string>();
+    for (const object of Object.values(scene.objects)) {
+      if (!object.name.toLowerCase().includes(query)) continue;
+      for (let id: string | null = object.id; id; id = scene.objects[id]?.parentId ?? null) keep.add(id);
+    }
+    return all.filter((row) => keep.has(row.id));
+  }, [scene, collapsed, filter]);
   const total = Object.keys(scene.objects).length;
 
   const toggleCollapsed = (id: string) =>
@@ -57,10 +70,23 @@ export function HierarchyPanel() {
   };
 
   return (
-    <section className="panel hierarchy" aria-label="Scene hierarchy">
-      <div className="panel-header">
-        <h2>Scene</h2>
-        <span className="panel-count">{total}</span>
+    <section className="parts-panel" aria-label="Parts list">
+      <div className="panel-toolbar">
+        <label className="filter-field">
+          <Icon name="search" size={14} />
+          <span className="visually-hidden">Find a part</span>
+          <input
+            value={filter}
+            placeholder={`Find among ${total} ${total === 1 ? 'part' : 'parts'}`}
+            onChange={(event) => setFilter(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && filter) {
+                event.stopPropagation();
+                setFilter('');
+              }
+            }}
+          />
+        </label>
       </div>
       <div
         className={`tree ${dropTarget?.id === null ? 'is-root-drop' : ''}`}
@@ -93,6 +119,7 @@ export function HierarchyPanel() {
                 'tree-row',
                 id === selectedId ? 'is-selected' : '',
                 object.visible ? '' : 'is-hidden',
+                object.locked ? 'is-locked' : '',
                 drop ? `drop-${drop}` : '',
               ].join(' ')}
               style={{ paddingLeft: 8 + depth * 16 }}
@@ -155,7 +182,20 @@ export function HierarchyPanel() {
               )}
               <button
                 type="button"
-                className="tree-visibility"
+                className={`tree-action tree-lock ${object.locked ? 'is-on' : ''}`}
+                aria-label={object.locked ? `Unlock ${object.name}` : `Lock ${object.name}`}
+                aria-pressed={!!object.locked}
+                title={object.locked ? 'Locked: cannot be picked in 3D or changed. Click to unlock.' : 'Lock'}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  actions.toggleLock(id);
+                }}
+              >
+                <Icon name={object.locked ? 'lock' : 'unlock'} size={14} />
+              </button>
+              <button
+                type="button"
+                className={`tree-action tree-visibility ${object.visible ? '' : 'is-on'}`}
                 aria-label={object.visible ? `Hide ${object.name}` : `Show ${object.name}`}
                 title={object.visible ? 'Hide' : 'Show'}
                 onClick={(event) => {
@@ -168,7 +208,7 @@ export function HierarchyPanel() {
             </div>
           );
         })}
-        {rows.length === 0 && <p className="empty-note">No objects yet.</p>}
+        {rows.length === 0 && <p className="empty-note">{filter ? 'No part has that name.' : 'No parts yet. Draw on the board or add one from the Create menu.'}</p>}
       </div>
       <p className="panel-hint">Drag to reorder or nest. Double-click to rename.</p>
     </section>

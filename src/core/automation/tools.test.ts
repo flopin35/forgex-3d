@@ -5,6 +5,7 @@ import { parseProject, serializeProject } from '../project/projectFile';
 import { isConstructionMesh, type MeshObject } from '../scene/types';
 import { runTool, TOOL_SPECS } from './tools';
 import { ToolError, type ToolContext, type ToolHost } from './toolTypes';
+import { MemoryStorage, StorageLibrary } from '../library/memoryLibrary';
 
 function context(): ToolContext {
   const store = new EditorStore(createEmptyDocument());
@@ -13,6 +14,7 @@ function context(): ToolContext {
     newProject: async () => 'new',
     openProject: async () => 'open',
     saveProject: async () => 'saved',
+    library: new StorageLibrary(new MemoryStorage(), 'test library'),
   };
   return { store, host };
 }
@@ -273,5 +275,52 @@ describe('car modelling tools', () => {
     expect(out.geometry.closed).toBe(true);
     const tyre = details((await runTool('get_object', { object: 'Tyre' }, ctx)).text);
     expect(tyre.points.filter((p: { smooth?: boolean }) => p.smooth)).toHaveLength(2);
+  });
+
+  it('locks objects against edits and unlocks them again', async () => {
+    const ctx = context();
+    await runTool('add_part', { part: 'cube', name: 'Crate' }, ctx);
+    await runTool('set_lock', { object: 'Crate', locked: true }, ctx);
+    await expectToolError(runTool('set_transform', { object: 'Crate', position: [1, 0, 0] }, ctx), 'locked');
+    await expectToolError(runTool('delete_object', { object: 'Crate' }, ctx), 'locked');
+    expect(details((await runTool('get_object', { object: 'Crate', include_geometry: false }, ctx)).text).locked).toBe(true);
+    await runTool('set_lock', { object: 'Crate', locked: false }, ctx);
+    await runTool('set_transform', { object: 'Crate', position: [1, 0, 0] }, ctx);
+    await runTool('undo', { steps: 2 }, ctx);
+    expect(Object.values(ctx.store.getState().scene.objects)[0].locked).toBe(true);
+  });
+
+  it('saves and restores snapshots, and undo returns to the scene before', async () => {
+    const ctx = context();
+    await runTool('add_part', { part: 'cube', name: 'Crate' }, ctx);
+    const saved = await runTool('save_snapshot', { name: 'One crate' }, ctx);
+    expect(saved.text).toContain('One crate');
+    await runTool('add_part', { part: 'sphere', name: 'Ball' }, ctx);
+    expect(Object.keys(ctx.store.getState().scene.objects)).toHaveLength(2);
+    await runTool('restore_snapshot', { snapshot: 'one crate' }, ctx);
+    expect(Object.values(ctx.store.getState().scene.objects).map((o) => o.name)).toEqual(['Crate']);
+    await runTool('undo', {}, ctx);
+    expect(Object.keys(ctx.store.getState().scene.objects)).toHaveLength(2);
+    expect(details((await runTool('list_snapshots', {}, ctx)).text)).toHaveLength(1);
+    await expectToolError(runTool('restore_snapshot', { snapshot: 'nope' }, ctx), 'list_snapshots');
+  });
+
+  it('shares parts between projects through My Parts', async () => {
+    const ctx = context();
+    await runTool('add_template', { template: 'supercar' }, ctx);
+    const car = Object.values(ctx.store.getState().scene.objects).find((o) => o.parentId === null)!;
+    await runTool('save_to_library', { object: car.id, name: 'Coupe', description: 'Two doors' }, ctx);
+    await expectToolError(runTool('save_to_library', { object: car.id, name: 'Coupe' }, ctx), 'already has');
+    const listed = details((await runTool('list_library', {}, ctx)).text);
+    expect(listed[0]).toMatchObject({ name: 'Coupe', file: 'Coupe.forgexpart' });
+
+    // A second project on the same library.
+    const other: ToolContext = { store: new EditorStore(createEmptyDocument()), host: ctx.host };
+    await runTool('add_part', { part: 'cube', name: 'Garage' }, other);
+    const added = details((await runTool('add_from_library', { part: 'coupe' }, other)).text);
+    expect(added.name).toBe('Coupe');
+    expect(added.position[0]).toBeGreaterThan(1);
+    expect(Object.keys(other.store.getState().scene.objects).length).toBe(Object.keys(ctx.store.getState().scene.objects).length + 1);
+    await expectToolError(runTool('add_from_library', { part: 'tractor' }, other), 'list_library');
   });
 });

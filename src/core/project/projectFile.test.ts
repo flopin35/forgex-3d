@@ -6,6 +6,7 @@ import type { Scene } from '../scene/types';
 import { createDefaultDocument } from './defaultDocument';
 import { ensureProjectExtension, fileNameFromPath, projectNameFromPath } from './paths';
 import { createReference } from './references';
+import { createSnapshot } from './snapshots';
 import {
   DEFAULT_SETTINGS,
   migrateProjectData,
@@ -179,7 +180,7 @@ describe('version 3 content', () => {
     const references = [{ ...createReference({ id: 'ref_1', plane: 'side' as const, name: 'Car side', src: 'data:image/png;base64,iVBORw0KGgo=', aspect: 0.4 }), flip: true }];
     const document: ProjectDocument = { ...doc, scene, references };
     const text = serializeProject(document);
-    expect(JSON.parse(text).version).toBe(3);
+    expect(JSON.parse(text).version).toBe(PROJECT_FORMAT_VERSION);
     const reopened = parseProject(text);
     if (!reopened.ok) throw new Error(reopened.errors.join('\n'));
     expect(reopened.document).toEqual(document);
@@ -209,6 +210,37 @@ describe('version 3 content', () => {
     expect(!badModifiers.ok && badModifiers.errors.join(' ')).toContain('modifiers');
     const badBody = parseProject(mutate(text, (data) => (data.scene.objects.at(-1).source.views.top = { points: 'none' })));
     expect(!badBody.ok && badBody.errors.join(' ')).toContain('views.top');
+  });
+});
+
+describe('version 4 content', () => {
+  it('round-trips locked objects and snapshots', () => {
+    const doc = sampleDocument();
+    const [firstId] = doc.scene.rootIds;
+    const lockedScene: Scene = { ...doc.scene, objects: { ...doc.scene.objects, [firstId]: { ...doc.scene.objects[firstId], locked: true } } };
+    const snapshots = [createSnapshot(doc.scene, 'Before the wheels', 'snap_1', new Date('2026-10-01T10:00:00Z'))];
+    const document: ProjectDocument = { ...doc, scene: lockedScene, snapshots };
+    const text = serializeProject(document);
+    const data = JSON.parse(text);
+    expect(data.version).toBe(4);
+    expect(data.scene.objects[0].locked).toBe(true);
+    expect(data.snapshots[0].scene.objects[0].locked).toBeUndefined();
+    const reopened = parseProject(text);
+    if (!reopened.ok) throw new Error(reopened.errors.join('\n'));
+    expect(reopened.document).toEqual(document);
+  });
+
+  it('opens version 3 files and skips a broken snapshot with a warning', () => {
+    const v3 = parseProject(mutate(serializeProject(sampleDocument()), (data) => (data.version = 3)));
+    expect(v3.ok && v3.migratedFrom).toBe(3);
+    const text = serializeProject({ ...sampleDocument(), snapshots: [createSnapshot(sampleDocument().scene, 'Good', 'snap_a')] });
+    const broken = parseProject(mutate(text, (data) => data.snapshots.push({ id: 'snap_b', name: 'Bad', createdAt: 'x', scene: { rootIds: ['missing'], objects: [] } })));
+    expect(broken.ok).toBe(true);
+    if (broken.ok) {
+      expect(broken.document.snapshots?.map((s) => s.name)).toEqual(['Good']);
+      expect(broken.warnings.join(' ')).toContain('Bad');
+    }
+    expect(parseProject(mutate(text, (data) => (data.scene.objects[0].locked = 'yes'))).ok).toBe(false);
   });
 });
 

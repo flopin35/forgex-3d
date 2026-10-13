@@ -1,4 +1,5 @@
 import type { EditorStore } from '../editor/editorStore';
+import type { LibraryStore } from '../library/libraryPart';
 
 /** A JSON Schema object describing a tool's arguments. */
 export type JsonSchema = Record<string, unknown>;
@@ -58,6 +59,8 @@ export interface ToolHost {
   newProject(options: { path?: string; empty: boolean }): Promise<string>;
   openProject(path: string): Promise<string>;
   saveProject(path?: string): Promise<string>;
+  /** My Parts, the shared parts library (absent where there is nowhere to keep it). */
+  readonly library?: LibraryStore;
   /** Only the running app can render. */
   captureViewport?(options: { view: ViewPreset; frame: boolean; width: number }): Promise<ToolImage>;
 }

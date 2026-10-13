@@ -1,0 +1,1654 @@
+{
+ "instructions": "FORGEX 3D is a 3D modelling studio for game assets (Roblox, Blender). Units are metres, +Y is up, the front of an asset faces +Z, and rotations are degrees applied in X, Y, Z order. For Roblox, 1 stud = 0.28 m. Call get_status first. When the FORGEX 3D app is open, every change appears live in its 3D view and undo history, and capture_viewport returns an image to check your work. Model the way the user does: create_blueprint draws dots joined by lines on a front, side or top plane and makes them flat, extruded or revolved; create_body lofts a smooth body (car, hull) from side, top and front outlines; create_point_mesh builds a mesh from vertices and edges, with faces from closed loops. add_template adds a ready-made supercar or saloon to start from; add_part adds primitives; group_objects and set_parent organise parts. Save a version with save_snapshot before a big change (restore_snapshot goes back). Respect locked objects: ask the user before unlocking them with set_lock. My Parts is a library shared by every project: save_to_library keeps a finished part, list_library and add_from_library reuse parts in later projects. Every change can be undone. When the app is closed, the Node server edits .forgex files directly: use save_project with a name (saved in the FORGEX projects folder) to keep work.",
+ "tools": [
+  {
+   "name": "get_status",
+   "title": "Get FORGEX status",
+   "description": "Shows where the tools are working (the open FORGEX 3D app, or a .forgex file), the project name and path, unsaved changes, object count, grid settings and the world conventions. Call this first.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "list_objects",
+   "title": "List scene objects",
+   "description": "Lists every object as a tree (groups contain children) with id, name, type, position, rotation, scale and colour.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "get_object",
+   "title": "Get object details",
+   "description": "Returns one object in full: transform, world position, parent and children. For point-built objects it also returns the geometry report and the vertex, edge and face ids you need for edit_point_mesh.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "include_geometry": {
+      "type": "boolean",
+      "description": "Include vertex, edge and face lists (default true)"
+     }
+    },
+    "required": [
+     "object"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "list_parts",
+   "title": "List parts",
+   "description": "Lists the parts that add_part can create.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "add_part",
+   "title": "Add a part",
+   "description": "Adds a part from the library. cube and plane are point-built (editable vertices); sphere and cylinder are smooth 1 m primitives; group is an empty parent. Without a position the part rests on the ground at the origin. Names are made unique.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "part": {
+      "type": "string",
+      "enum": [
+       "cube",
+       "plane",
+       "sphere",
+       "cylinder",
+       "group"
+      ]
+     },
+     "name": {
+      "type": "string"
+     },
+     "position": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Position in metres [x, y, z], +Y is up. Relative to the parent when one is given."
+     },
+     "rotation": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Rotation in degrees [x, y, z], applied in X, Y, Z order"
+     },
+     "scale": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Scale factors [x, y, z]"
+     },
+     "color": {
+      "type": "string",
+      "description": "Hex colour, for example #3d9fe8"
+     },
+     "parent": {
+      "type": "string",
+      "description": "Optional parent object id or name"
+     }
+    },
+    "required": [
+     "part"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "create_point_mesh",
+   "title": "Build a mesh from points",
+   "description": "The FORGEX way to model: give vertices, connect them with edges, and faces are generated from the closed loops (or give faces explicitly). Positions are in metres in the object's local space, +Y up. Faces must be flat unless allow_non_planar is true. Normals are oriented automatically (closed shells face outward). Example cube: 8 vertices and 12 edges with fill_loops.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "vertices": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 3,
+       "maxItems": 3,
+       "description": "Vertex position"
+      },
+      "minItems": 1,
+      "description": "Vertex positions; edges and faces refer to them by index"
+     },
+     "edges": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0
+       },
+       "minItems": 2,
+       "maxItems": 2
+      },
+      "description": "Pairs of vertex indices to connect"
+     },
+     "faces": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0
+       },
+       "minItems": 3
+      },
+      "description": "Optional explicit faces as loops of vertex indices. Missing boundary edges are added."
+     },
+     "fill_loops": {
+      "type": "boolean",
+      "description": "Generate faces from closed edge loops (default: true when no faces are given)"
+     },
+     "allow_non_planar": {
+      "type": "boolean",
+      "description": "Allow bent explicit faces (default false)"
+     },
+     "position": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Position in metres [x, y, z], +Y is up. Relative to the parent when one is given."
+     },
+     "rotation": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Rotation in degrees [x, y, z], applied in X, Y, Z order"
+     },
+     "scale": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Scale factors [x, y, z]"
+     },
+     "color": {
+      "type": "string",
+      "description": "Hex colour, for example #3d9fe8"
+     },
+     "parent": {
+      "type": "string",
+      "description": "Optional parent object id or name"
+     }
+    },
+    "required": [
+     "name",
+     "vertices"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "edit_point_mesh",
+   "title": "Edit a point-built mesh",
+   "description": "Edits the vertices, edges and faces of a point-built object in one undoable step. Steps run in this order: remove faces, remove edges, remove vertices (dependent edges and faces go too), add vertices, move vertices, add edges, add faces, fill loops, recalculate normals. Refer to existing vertices by id (v3) and to vertices added in this call by their index in add_vertices. Positions are local, in metres.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "remove_faces": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Face ids such as f2"
+     },
+     "remove_edges": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Edge ids such as e5"
+     },
+     "remove_vertices": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Vertex ids such as v3"
+     },
+     "add_vertices": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 3,
+       "maxItems": 3,
+       "description": "Vertex position"
+      }
+     },
+     "move_vertices": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "vertex": {
+         "anyOf": [
+          {
+           "type": "string",
+           "description": "An existing vertex id, such as v3"
+          },
+          {
+           "type": "integer",
+           "minimum": 0,
+           "description": "Index into add_vertices from this same call"
+          }
+         ]
+        },
+        "position": {
+         "type": "array",
+         "items": {
+          "type": "number"
+         },
+         "minItems": 3,
+         "maxItems": 3,
+         "description": "New position"
+        },
+        "offset": {
+         "type": "array",
+         "items": {
+          "type": "number"
+         },
+         "minItems": 3,
+         "maxItems": 3,
+         "description": "Move by this amount instead"
+        }
+       },
+       "required": [
+        "vertex"
+       ]
+      }
+     },
+     "add_edges": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "anyOf": [
+         {
+          "type": "string",
+          "description": "An existing vertex id, such as v3"
+         },
+         {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index into add_vertices from this same call"
+         }
+        ]
+       },
+       "minItems": 2,
+       "maxItems": 2
+      }
+     },
+     "add_faces": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "anyOf": [
+         {
+          "type": "string",
+          "description": "An existing vertex id, such as v3"
+         },
+         {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index into add_vertices from this same call"
+         }
+        ]
+       },
+       "minItems": 3
+      }
+     },
+     "fill_loops": {
+      "type": "boolean",
+      "description": "Generate faces from closed edge loops after the other steps"
+     },
+     "recalculate_normals": {
+      "type": "boolean",
+      "description": "Re-orient all faces (default true when faces were added)"
+     },
+     "allow_non_planar": {
+      "type": "boolean",
+      "description": "Allow bent faces in add_faces (default false)"
+     }
+    },
+    "required": [
+     "object"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "check_geometry",
+   "title": "Check geometry",
+   "description": "Checks point-built and blueprint objects against the geometry invariants: loose vertices, open boundaries, non-manifold edges, bent or zero-area faces, and inconsistent normals. Checks every such object when none is named.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Optional object id or name"
+     }
+    },
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "create_blueprint",
+   "title": "Draw a blueprint",
+   "description": "Draws a 2D outline of dots and lines on a plane (front, side or top) and turns it into a 3D object, the same way the user draws on the FORGEX board. Closed loops are filled; a loop inside another becomes a hole. shape.mode: \"extrude\" (default, gives the outline a thickness of shape.depth metres), \"flat\" (a panel), or \"revolve\" (spins the lines around an axis like a lathe: shape.axis \"vertical\" spins around x = 0 for bottles and vases, draw the right half with x >= 0; \"horizontal\" spins around y = 0 for wheels and barrels, draw the profile above the line with y >= 0; on the front plane that axle runs along X). shape.mirror copies the drawing across x = 0, so you can draw half of a symmetric object. smooth turns corners into curves. Without lines or loops, the points are joined in order into one closed outline. For a car body, plane or boat hull use create_body instead.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "plane": {
+      "type": "string",
+      "enum": [
+       "front",
+       "side",
+       "top"
+      ],
+      "description": "front: x right (+X), y up (+Y), thickness along Z. side: seen from the right, x towards the back (-Z), y up, thickness along X. top: seen from above, x right (+X), y towards the back (-Z); extrusions grow upwards from the ground like walls. Default front."
+     },
+     "points": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 2,
+       "maxItems": 2
+      },
+      "minItems": 1,
+      "description": "Dot positions [x, y] in metres on the plane"
+     },
+     "lines": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0
+       },
+       "minItems": 2,
+       "maxItems": 2
+      },
+      "description": "Pairs of point indices to join"
+     },
+     "loops": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0
+       },
+       "minItems": 3
+      },
+      "description": "Closed outlines as lists of point indices"
+     },
+     "closed": {
+      "type": "boolean",
+      "description": "When no lines or loops are given: close the outline (default true)"
+     },
+     "smooth": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "array",
+        "items": {
+         "type": "integer",
+         "minimum": 0
+        }
+       }
+      ],
+      "description": "Smooth dots bend their lines into curves through the dot (true for all, or a list of point indices). Use for car bodies, blades, organic shapes."
+     },
+     "shape": {
+      "type": "object",
+      "properties": {
+       "mode": {
+        "type": "string",
+        "enum": [
+         "flat",
+         "extrude",
+         "revolve"
+        ]
+       },
+       "depth": {
+        "type": "number",
+        "minimum": 0,
+        "description": "Extrusion thickness in metres (default 0.2)"
+       },
+       "segments": {
+        "type": "integer",
+        "minimum": 3,
+        "maximum": 256,
+        "description": "Steps around the axis when revolving (default 32)"
+       },
+       "mirror": {
+        "type": "boolean",
+        "description": "Copy the drawing across x = 0"
+       },
+       "axis": {
+        "type": "string",
+        "enum": [
+         "vertical",
+         "horizontal"
+        ],
+        "description": "Revolve around the vertical line x = 0 (default) or the horizontal line y = 0 (wheels)"
+       },
+       "curve_steps": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 48,
+        "description": "Straight pieces per curved line (default 10)"
+       }
+      },
+      "additionalProperties": false
+     },
+     "position": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Position in metres [x, y, z], +Y is up. Relative to the parent when one is given."
+     },
+     "rotation": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Rotation in degrees [x, y, z], applied in X, Y, Z order"
+     },
+     "scale": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Scale factors [x, y, z]"
+     },
+     "color": {
+      "type": "string",
+      "description": "Hex colour, for example #3d9fe8"
+     },
+     "parent": {
+      "type": "string",
+      "description": "Optional parent object id or name"
+     }
+    },
+    "required": [
+     "name",
+     "points"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "edit_blueprint",
+   "title": "Edit a blueprint",
+   "description": "Changes a blueprint drawing and how it becomes 3D, in one undoable step. Steps run in order: remove lines, remove points (their lines go too), add points, move points, add lines, then plane and shape. Refer to existing dots by id (p3) and to dots added in this call by their index in add_points. Coordinates are [x, y] metres on the drawing plane.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "remove_lines": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "remove_points": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "add_points": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 2,
+       "maxItems": 2
+      }
+     },
+     "move_points": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "point": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "type": "integer",
+           "minimum": 0
+          }
+         ]
+        },
+        "position": {
+         "type": "array",
+         "items": {
+          "type": "number"
+         },
+         "minItems": 2,
+         "maxItems": 2
+        },
+        "offset": {
+         "type": "array",
+         "items": {
+          "type": "number"
+         },
+         "minItems": 2,
+         "maxItems": 2
+        }
+       },
+       "required": [
+        "point"
+       ]
+      }
+     },
+     "add_lines": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "integer",
+          "minimum": 0
+         }
+        ]
+       },
+       "minItems": 2,
+       "maxItems": 2
+      }
+     },
+     "smooth_points": {
+      "type": "array",
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer",
+         "minimum": 0
+        }
+       ]
+      },
+      "description": "Dots to make smooth (curved)"
+     },
+     "sharp_points": {
+      "type": "array",
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer",
+         "minimum": 0
+        }
+       ]
+      },
+      "description": "Dots to make sharp corners"
+     },
+     "view": {
+      "type": "string",
+      "enum": [
+       "side",
+       "top",
+       "front"
+      ],
+      "description": "For a body: which drawing to edit (side, top or front). Required for bodies."
+     },
+     "plane": {
+      "type": "string",
+      "enum": [
+       "front",
+       "side",
+       "top"
+      ],
+      "description": "Blueprints only: move the drawing to another plane"
+     },
+     "shape": {
+      "type": "object",
+      "properties": {
+       "mode": {
+        "type": "string",
+        "enum": [
+         "flat",
+         "extrude",
+         "revolve"
+        ]
+       },
+       "depth": {
+        "type": "number",
+        "minimum": 0,
+        "description": "Extrusion thickness in metres (default 0.2)"
+       },
+       "segments": {
+        "type": "integer",
+        "minimum": 3,
+        "maximum": 256,
+        "description": "Steps around the axis when revolving (default 32)"
+       },
+       "mirror": {
+        "type": "boolean",
+        "description": "Copy the drawing across x = 0"
+       },
+       "axis": {
+        "type": "string",
+        "enum": [
+         "vertical",
+         "horizontal"
+        ],
+        "description": "Revolve around the vertical line x = 0 (default) or the horizontal line y = 0 (wheels)"
+       },
+       "curve_steps": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 48,
+        "description": "Straight pieces per curved line (default 10)"
+       }
+      },
+      "additionalProperties": false
+     },
+     "body": {
+      "type": "object",
+      "properties": {
+       "stations": {
+        "type": "integer",
+        "minimum": 4,
+        "maximum": 200,
+        "description": "Slices along the length (default 48)"
+       },
+       "section_points": {
+        "type": "integer",
+        "minimum": 8,
+        "maximum": 160,
+        "description": "Points around each slice (default 40)"
+       },
+       "roundness": {
+        "type": "number",
+        "minimum": 1.5,
+        "maximum": 12,
+        "description": "Cross-section when there is no front view: 2 oval, higher boxier (default 4)"
+       },
+       "symmetric": {
+        "type": "boolean",
+        "description": "Top and front views are right halves, mirrored (default true)"
+       },
+       "curve_steps": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 48
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    "required": [
+     "object"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "create_body",
+   "title": "Loft a body from three views",
+   "description": "Builds a smooth closed body from three outlines, the way car designers work from blueprints: the side view (length and height), the top view (length and width) and an optional front view (the cross-section shape). Use it for car bodies, cabins, aircraft fuselages, boat hulls and helmets. Coordinates: side view [x, y] has x = -Z (the front of the object, +Z, is on the left) and y = up; top view [x, y] has x = X and y = -Z (front at the bottom); front view [x, y] has x = X and y = up. The side view is a closed outline. With symmetric (default true) the top and front views are the right half only (x >= 0), drawn from the centre line round to the centre line. Notches cut up into the bottom of the side outline make wheel arches. smooth (default true) curves the outlines through the dots. Build a car from several bodies (body, cabin) plus revolved wheels; add_template shows complete examples.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "side": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 2,
+       "maxItems": 2
+      },
+      "minItems": 3,
+      "description": "Side view outline [x = -Z, y = up], closed"
+     },
+     "top": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 2,
+       "maxItems": 2
+      },
+      "minItems": 2,
+      "description": "Top view outline [x = X, y = -Z]: right half when symmetric"
+     },
+     "front": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 2,
+       "maxItems": 2
+      },
+      "description": "Optional front view cross-section [x = X, y = up]: right half when symmetric"
+     },
+     "smooth": {
+      "type": "boolean",
+      "description": "Curve the outlines through every dot (default true)"
+     },
+     "body": {
+      "type": "object",
+      "properties": {
+       "stations": {
+        "type": "integer",
+        "minimum": 4,
+        "maximum": 200,
+        "description": "Slices along the length (default 48)"
+       },
+       "section_points": {
+        "type": "integer",
+        "minimum": 8,
+        "maximum": 160,
+        "description": "Points around each slice (default 40)"
+       },
+       "roundness": {
+        "type": "number",
+        "minimum": 1.5,
+        "maximum": 12,
+        "description": "Cross-section when there is no front view: 2 oval, higher boxier (default 4)"
+       },
+       "symmetric": {
+        "type": "boolean",
+        "description": "Top and front views are right halves, mirrored (default true)"
+       },
+       "curve_steps": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 48
+       }
+      },
+      "additionalProperties": false
+     },
+     "position": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Position in metres [x, y, z], +Y is up. Relative to the parent when one is given."
+     },
+     "rotation": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Rotation in degrees [x, y, z], applied in X, Y, Z order"
+     },
+     "scale": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Scale factors [x, y, z]"
+     },
+     "color": {
+      "type": "string",
+      "description": "Hex colour, for example #3d9fe8"
+     },
+     "parent": {
+      "type": "string",
+      "description": "Optional parent object id or name"
+     }
+    },
+    "required": [
+     "name",
+     "side",
+     "top"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "add_template",
+   "title": "Add a ready-made model",
+   "description": "Adds a complete, fully editable model built from bodies and blueprints: supercar (low mid-engine sports car) or saloon (long luxury limousine). Every part (body, cabin, lights, wheels with tyres, rims and spokes) can be reshaped afterwards with edit_blueprint. A good starting point for cars.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "template": {
+      "type": "string",
+      "enum": [
+       "supercar",
+       "saloon"
+      ]
+     },
+     "name": {
+      "type": "string"
+     },
+     "position": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Where to put it, in metres; it rests on the ground"
+     },
+     "color": {
+      "type": "string",
+      "description": "Paint colour for the body, for example #c0392b"
+     }
+    },
+    "required": [
+     "template"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "set_modifiers",
+   "title": "Smooth and mirror a mesh",
+   "description": "Non-destructive finishing for any mesh: subdivide (0 to 3 levels of Catmull-Clark smoothing, which rounds blocky point-built shapes into organic ones), mirror (copy the mesh across its local x, y or z = 0 plane and join the halves, so you can model one half), and smooth_shading (curved surfaces look round). The editable source is unchanged; values you leave out stay as they are.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "subdivide": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+     },
+     "mirror": {
+      "type": "string",
+      "enum": [
+       "none",
+       "x",
+       "y",
+       "z"
+      ]
+     },
+     "smooth_shading": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "object"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "convert_to_points",
+   "title": "Convert blueprint to points",
+   "description": "Turns a blueprint or body into a point-built object with its current 3D shape, so individual vertices can be edited with edit_point_mesh. The drawings are no longer used afterwards (undo restores them). Modifiers stay on.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     }
+    },
+    "required": [
+     "object"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "set_transform",
+   "title": "Set transform",
+   "description": "Sets position (metres), rotation (degrees) and/or scale of an object, relative to its parent. Values you leave out stay as they are.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "position": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Position in metres [x, y, z], +Y is up. Relative to the parent when one is given."
+     },
+     "rotation": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Rotation in degrees [x, y, z], applied in X, Y, Z order"
+     },
+     "scale": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Scale factors [x, y, z]"
+     }
+    },
+    "required": [
+     "object"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "set_color",
+   "title": "Set colour",
+   "description": "Sets the colour of a mesh object.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "color": {
+      "type": "string",
+      "description": "Hex colour, for example #3d9fe8"
+     }
+    },
+    "required": [
+     "object",
+     "color"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "rename_object",
+   "title": "Rename object",
+   "description": "Renames an object. Names show in the scene hierarchy and are saved in the project.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "object",
+     "name"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "set_visibility",
+   "title": "Show or hide",
+   "description": "Shows or hides an object (and, in the viewport, its children).",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "visible": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "object",
+     "visible"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "delete_object",
+   "title": "Delete object",
+   "description": "Deletes an object together with all its children. It can be undone.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     }
+    },
+    "required": [
+     "object"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "duplicate_object",
+   "title": "Duplicate object",
+   "description": "Copies an object and all its children with new ids, placed next to the original in the hierarchy.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "offset": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Move the copy by this amount in metres (default [0, 0, 0])"
+     },
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "object"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "set_parent",
+   "title": "Set parent",
+   "description": "Moves an object under another object (or to the top level with parent null). Its position in the world stays the same.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "parent": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "description": "New parent id or name, or null for the top level"
+     }
+    },
+    "required": [
+     "object",
+     "parent"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "group_objects",
+   "title": "Group objects",
+   "description": "Creates a group at the centre of the given objects and moves them into it, keeping their world positions.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "objects": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1
+     },
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "objects"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "select_object",
+   "title": "Select object",
+   "description": "Selects an object in the editor (pass null to clear the selection). Useful before capture_viewport in the app.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "object"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "openWorldHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "set_lock",
+   "title": "Lock or unlock object",
+   "description": "Locks an object so it cannot be picked in the 3D view, moved, edited or deleted (by the user or by these tools) until it is unlocked. Use it to protect finished parts. Locking a group protects everything inside it.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "locked": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "object",
+     "locked"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false,
+    "idempotentHint": true
+   }
+  },
+  {
+   "name": "list_snapshots",
+   "title": "List snapshots",
+   "description": "Lists the saved versions (snapshots) stored in this project, oldest first, with their ids, names, dates and object counts.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "save_snapshot",
+   "title": "Save snapshot",
+   "description": "Saves the whole scene as a named version inside the project, to come back to with restore_snapshot. Take one before a big or risky change. Projects keep the latest 40.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "Name such as \"Before new wheels\" (default \"Version N\")"
+     }
+    },
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "restore_snapshot",
+   "title": "Restore snapshot",
+   "description": "Replaces the scene with a saved snapshot. This is one undoable change: undo brings back the scene as it was before.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "snapshot": {
+      "type": "string",
+      "description": "Snapshot id or exact name"
+     }
+    },
+    "required": [
+     "snapshot"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "list_library",
+   "title": "List My Parts",
+   "description": "Lists the reusable parts in My Parts, the shared library every FORGEX project can use (on Windows: Documents\\FORGEX 3D\\Library). Parts saved here in one project can be added to any other with add_from_library.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "save_to_library",
+   "title": "Save to My Parts",
+   "description": "Saves an object and everything inside it to My Parts, so it can be reused in any project. The saved copy stands at the origin; the object in this scene is not changed.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "object": {
+      "type": "string",
+      "description": "Object id (such as obj_3f9a1c0b2d4e5f60) or exact name"
+     },
+     "name": {
+      "type": "string",
+      "description": "Part name (default: the object name)"
+     },
+     "description": {
+      "type": "string",
+      "description": "A short note on what the part is for"
+     },
+     "overwrite": {
+      "type": "boolean",
+      "description": "Replace a part with the same name (default false)"
+     }
+    },
+    "required": [
+     "object"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "add_from_library",
+   "title": "Add from My Parts",
+   "description": "Adds a copy of a part from My Parts to the scene, with new ids. Without a position it is placed clear of the existing objects.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "part": {
+      "type": "string",
+      "description": "Part name or file name from list_library"
+     },
+     "position": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Where to put it, in metres (default: beside the scene)"
+     },
+     "parent": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "description": "Optional parent object id or name"
+     }
+    },
+    "required": [
+     "part"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "undo",
+   "title": "Undo",
+   "description": "Undoes the most recent changes in FORGEX, whether the AI or the user made them.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "steps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+     }
+    },
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "redo",
+   "title": "Redo",
+   "description": "Redoes changes that were undone.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "steps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+     }
+    },
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "new_project",
+   "title": "New project",
+   "description": "Starts a new project. In the app, the user is asked first if there are unsaved changes. A relative path (like \"kart\") goes in the FORGEX projects folder; the file is written when saved.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string",
+      "description": "Optional .forgex path for the new project"
+     },
+     "empty": {
+      "type": "boolean",
+      "description": "Start with an empty scene (default true); false starts with the default cube"
+     }
+    },
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "open_project",
+   "title": "Open project",
+   "description": "Opens a .forgex project. In the app, the user is asked first if there are unsaved changes. Relative paths use the FORGEX projects folder.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path"
+    ],
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "save_project",
+   "title": "Save project",
+   "description": "Saves the project as a .forgex file, to the given path or to where it was last saved. Relative paths use the FORGEX projects folder.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string"
+     }
+    },
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "capture_viewport",
+   "title": "Capture viewport image",
+   "description": "Returns an image of the FORGEX 3D viewport so you can check your work. Needs the app to be open. view picks a camera angle (current keeps the user's view); frame fits all objects in view first.",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "view": {
+      "type": "string",
+      "enum": [
+       "current",
+       "perspective",
+       "front",
+       "back",
+       "left",
+       "right",
+       "top",
+       "bottom"
+      ]
+     },
+     "frame": {
+      "type": "boolean",
+      "description": "Fit all objects in view (default true unless view is current)"
+     },
+     "width": {
+      "type": "integer",
+      "minimum": 256,
+      "maximum": 1600,
+      "description": "Image width in pixels (default 1024)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "openWorldHint": false
+   }
+  }
+ ]
+}

@@ -35,11 +35,31 @@ jobs:
           npm test 2>&1 | tee test-report.txt
           exit ${PIPESTATUS[0]}
 
+      - name: Check the bundled MCP server is up to date
+        shell: bash
+        run: |
+          npm run mcp:bundle
+          git diff --exit-code -- mcp/forgex-mcp.bundle.cjs || { echo "Run npm run mcp:bundle and commit mcp/forgex-mcp.bundle.cjs"; exit 1; }
+
       - name: Build the MCP server
         run: npm run mcp:build
 
+      - name: Rust tests for the built-in MCP relay (sockets and threads on Windows)
+        shell: bash
+        run: |
+          mkdir -p relaytest
+          printf '#[path = "../src-tauri/src/mini_json.rs"]\npub mod mini_json;\n#[path = "../src-tauri/src/mcp_relay.rs"]\npub mod mcp_relay;\n' > relaytest/lib.rs
+          rustc --edition 2021 --test relaytest/lib.rs -o relaytest/relaytest.exe
+          ./relaytest/relaytest.exe
+
       - name: Build the desktop app and installer
         run: npm run desktop:build
+
+      - name: Check the app works as an MCP server (FORGEX 3D.exe --mcp)
+        shell: bash
+        run: |
+          node scripts/smoke-mcp-relay.mjs src-tauri/target/release/forgex-3d.exe | tee mcp-smoke.txt
+          taskkill //IM forgex-3d.exe //F 2>/dev/null || true
 
       - name: Collect release files
         shell: pwsh
@@ -49,6 +69,7 @@ jobs:
           Copy-Item src-tauri/target/release/bundle/nsis/*.exe release/
           Copy-Item package-lock.json release/
           Copy-Item test-report.txt release/
+          Copy-Item mcp-smoke.txt release/
           Get-ChildItem release | Format-Table Name, Length
 
       - name: Publish a download page (GitHub release)
@@ -60,7 +81,7 @@ jobs:
           gh release create "build-${{ github.run_number }}" $files `
             --target "${{ github.sha }}" --prerelease `
             --title "FORGEX 3D build ${{ github.run_number }}" `
-            --notes "Windows build from commit ${{ github.sha }}. FORGEX.3D.exe runs directly; the setup file installs it with a Start menu entry. The app is not code-signed: if Windows SmartScreen appears, choose More info, then Run anyway."
+            --notes "Windows build from commit ${{ github.sha }}. FORGEX.3D.exe runs directly; the setup file installs it with a Start menu entry. AI apps run the same exe with --mcp (Help > Connect an AI assistant sets up Claude Desktop). The app is not code-signed: if Windows SmartScreen appears, choose More info, then Run anyway."
 
       - name: Store build files on the builds branch
         shell: pwsh

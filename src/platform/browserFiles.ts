@@ -1,5 +1,18 @@
+import { MemoryStorage, StorageLibrary, type TextStorage } from '../core/library/memoryLibrary';
 import { fileNameFromPath } from '../core/project/paths';
-import type { PlatformFiles } from './files';
+import { copyTextToClipboard, type PlatformFiles } from './files';
+
+function browserStorage(): TextStorage {
+  try {
+    const storage = window.localStorage;
+    const probe = '__forgex_probe__';
+    storage.setItem(probe, '1');
+    storage.removeItem(probe);
+    return storage;
+  } catch {
+    return new MemoryStorage();
+  }
+}
 
 function download(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob);
@@ -72,5 +85,17 @@ export function createBrowserFiles(): PlatformFiles {
       window.addEventListener('beforeunload', handler);
       return () => window.removeEventListener('beforeunload', handler);
     },
+
+    library: new StorageLibrary(browserStorage(), 'this browser'),
+
+    async folders() {
+      return null;
+    },
+
+    async reveal() {
+      throw new Error('Folders open in the desktop app only.');
+    },
+
+    copyText: copyTextToClipboard,
   };
 }

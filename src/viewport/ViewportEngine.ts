@@ -20,14 +20,20 @@ import {
 } from '../core/math/transform';
 import { cleanVec3, equals, type Vec3 } from '../core/math/vec3';
 import type { CameraState, ProjectSettings } from '../core/project/projectFile';
+import { isLocked } from '../core/scene/scene';
 import { meshGraphOf, SMOOTH_SHADING_ANGLE, sourceGraphOf, type Scene, type SceneObject } from '../core/scene/types';
 import { buildConstructionBuffers, buildGrid, buildPointBuffers, disposeObjectTree, PrimitiveGeometryCache } from './geometryFactory';
 
-const ACCENT = 0x2fe3ff;
-const EDGE_COLOR = 0x04101f;
-const VERTEX_COLOR = new THREE.Color(0xdfe8f3);
-const CAGE_COLOR = 0xffb02e;
-const VERTEX_SELECTED_COLOR = new THREE.Color(0xffb02e);
+// Light studio: forge blue for the selection, graphite for edges, amber for what is being edited.
+const ACCENT = 0x1764f4;
+const EDGE_COLOR = 0x1b2129;
+const EDGE_OPACITY = 0.38;
+const VERTEX_COLOR = new THREE.Color(0x1b2129);
+const CAGE_COLOR = 0xe8890c;
+const VERTEX_SELECTED_COLOR = new THREE.Color(0xe8890c);
+/** The 3D view's paper colour, also painted behind captured images. */
+const BACKDROP_TOP = '#f2f4f7';
+const BACKDROP_BOTTOM = '#dfe3e9';
 const DEFAULT_CAMERA: CameraState = { position: [2.7, 2.1, 3.6], target: [0, 0.75, 0] };
 const TURNTABLE_SPEED = 1.6;
 const VIEW_HELPER_SIZE = 128;
@@ -129,16 +135,18 @@ export class ViewportEngine implements ViewportApi {
     const room = new RoomEnvironment();
     this.environment = pmrem.fromScene(room, 0.04);
     this.scene.environment = this.environment.texture;
-    this.scene.environmentIntensity = 0.45;
+    this.scene.environmentIntensity = 0.55;
     (room as unknown as { dispose?: () => void }).dispose?.();
     pmrem.dispose();
 
-    const hemisphere = new THREE.HemisphereLight(0xe4eeff, 0x15202c, 0.8);
+    const hemisphere = new THREE.HemisphereLight(0xffffff, 0x8d96a3, 1.0);
     const key = new THREE.DirectionalLight(0xffffff, 1.7);
     key.position.set(6, 10, 7);
     const fill = new THREE.DirectionalLight(0x9cc8ff, 0.5);
     fill.position.set(-8, 4, -6);
     this.scene.add(hemisphere, key, fill, this.content, this.vertexProxy, this.objectHandle);
+    // Distant grid lines fade into the backdrop instead of shimmering at the horizon.
+    this.scene.fog = new THREE.Fog(0xe3e7ec, 16, 52);
 
     this.selectionBoxHelper = new THREE.Box3Helper(this.selectionBox, ACCENT);
     this.selectionBoxHelper.visible = false;
@@ -206,7 +214,10 @@ export class ViewportEngine implements ViewportApi {
     const savedTarget = this.orbit.target.clone();
     const helper = this.gizmo.getHelper();
     const helperVisible = helper.visible;
+    const boxVisible = this.selectionBoxHelper.visible;
     try {
+      // Pictures for the assistant show the model, not the editing aids.
+      this.selectionBoxHelper.visible = false;
       if (options.view !== 'current') this.applyViewDirection(options.view);
       if (options.frame) this.fitCamera(this.boundsOf(this.content, new THREE.Sphere()));
       this.orbit.update();
@@ -222,22 +233,82 @@ export class ViewportEngine implements ViewportApi {
       canvas.height = Math.max(1, Math.round(source.height * scale));
       const context = canvas.getContext('2d');
       if (!context) throw new Error('No 2D canvas available for the capture.');
-      const glow = context.createRadialGradient(canvas.width / 2, canvas.height * 0.18, 0, canvas.width / 2, canvas.height * 0.18, canvas.width);
-      glow.addColorStop(0, '#0c1c37');
-      glow.addColorStop(0.52, '#050c1b');
-      glow.addColorStop(1, '#02050b');
-      context.fillStyle = glow;
-      context.fillRect(0, 0, canvas.width, canvas.height);
+      paintBackdrop(context, canvas.width, canvas.height);
       context.drawImage(source, 0, 0, canvas.width, canvas.height);
       const url = canvas.toDataURL('image/jpeg', 0.9);
       return { data: url.slice(url.indexOf(',') + 1), mimeType: 'image/jpeg' };
     } finally {
       helper.visible = helperVisible;
+      this.selectionBoxHelper.visible = boxVisible;
       this.camera.position.copy(savedPosition);
       this.orbit.target.copy(savedTarget);
       this.orbit.update();
       this.requestRender();
     }
+  }
+
+  /**
+   * A square picture of one object alone, seen at three-quarter view, for My Parts. Other
+   * objects, the grid and the gizmo are hidden for the moment of the render.
+   */
+  captureObject(id: string, width: number): string | null {
+    const node = this.nodes.get(id);
+    if (!node) return null;
+    const savedPosition = this.camera.position.clone();
+    const savedTarget = this.orbit.target.clone();
+    const hidden: THREE.Object3D[] = [];
+    const hide = (object: THREE.Object3D | null) => {
+      if (object && object.visible) {
+        object.visible = false;
+        hidden.push(object);
+      }
+    };
+    try {
+      // Hide everything that is not the object, its parents or its children.
+      const keep = new Set<THREE.Object3D>();
+      for (let current: THREE.Object3D | null = node.object; current; current = current.parent) keep.add(current);
+      this.content.traverse((child) => {
+        if (keep.has(child) || child === this.content) return;
+        let inside = false;
+        for (let current: THREE.Object3D | null = child.parent; current; current = current.parent) if (current === node.object) inside = true;
+        if (!inside && child.userData.objectId) hide(child);
+      });
+      hide(this.grid);
+      hide(this.gizmo.getHelper());
+      hide(this.selectionBoxHelper);
+      this.setHighlight(node, false, false);
+      this.applyViewDirection('perspective');
+      this.fitCamera(this.boundsOf(node.object, new THREE.Sphere()));
+      this.renderer.clear();
+      this.renderer.render(this.scene, this.camera);
+      const source = this.renderer.domElement;
+      const side = Math.min(source.width, source.height);
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = Math.max(32, Math.min(width, side));
+      const context = canvas.getContext('2d');
+      if (!context) return null;
+      paintBackdrop(context, canvas.width, canvas.height);
+      context.drawImage(source, (source.width - side) / 2, (source.height - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', 0.82);
+    } catch {
+      return null;
+    } finally {
+      hidden.forEach((object) => (object.visible = true));
+      this.camera.position.copy(savedPosition);
+      this.orbit.target.copy(savedTarget);
+      this.orbit.update();
+      const state = this.store.getState();
+      if (state.selectedId === id) this.setHighlight(node, true, state.editMode === 'points');
+      this.requestRender();
+    }
+  }
+
+  /** Turns the camera to look from one side (front, top...) at the same distance. */
+  lookFrom(view: Exclude<ViewPreset, 'current'>): void {
+    this.applyViewDirection(view);
+    this.orbit.update();
+    this.saveCameraView();
+    this.requestRender();
   }
 
   /** Bounding sphere of an object's world-space contents (radius 1 around its origin if empty). */
@@ -406,7 +477,7 @@ export class ViewportEngine implements ViewportApi {
       if (isConstruction) {
         node.edges = new THREE.LineSegments(
           new THREE.BufferGeometry(),
-          new THREE.LineBasicMaterial({ color: EDGE_COLOR, transparent: true, opacity: 0.6 }),
+          new THREE.LineBasicMaterial({ color: EDGE_COLOR, transparent: true, opacity: EDGE_OPACITY }),
         );
         node.points = new THREE.Points(
           new THREE.BufferGeometry(),
@@ -548,7 +619,8 @@ export class ViewportEngine implements ViewportApi {
       this.selectionBoxHelper.visible = node.mesh === null;
     }
 
-    if (!node || state.tool === 'select' || !this.isShown(node.object)) {
+    // Locked objects show as selected but never get the gizmo.
+    if (!node || state.tool === 'select' || !this.isShown(node.object) || isLocked(state.scene, node.id)) {
       if (!this.drag) this.gizmo.detach();
       return;
     }
@@ -617,7 +689,7 @@ export class ViewportEngine implements ViewportApi {
     if (node.edges) {
       const material = node.edges.material as THREE.LineBasicMaterial;
       material.color.set(selected ? ACCENT : EDGE_COLOR);
-      material.opacity = selected ? 1 : 0.6;
+      material.opacity = selected ? 0.95 : EDGE_OPACITY;
     }
     if (node.points) node.points.visible = selected && pointsMode;
     if (node.cage) node.cage.visible = selected && pointsMode && node.shownGraph !== node.graph;
@@ -752,8 +824,9 @@ export class ViewportEngine implements ViewportApi {
     const pointer = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(pointer, this.camera);
     const meshes: THREE.Object3D[] = [];
+    // Locked objects cannot be picked: clicks go through them to what is behind.
     this.nodes.forEach((node) => {
-      if (node.mesh && this.isShown(node.mesh)) meshes.push(node.mesh);
+      if (node.mesh && this.isShown(node.mesh) && !isLocked(state.scene, node.id)) meshes.push(node.mesh);
     });
     const hit = this.raycaster.intersectObjects(meshes, false)[0];
     this.store.select(hit ? (hit.object.userData.objectId as string) : null);
@@ -813,10 +886,26 @@ export class ViewportEngine implements ViewportApi {
       const node = this.nodes.get(this.highlightedId);
       if (node) this.selectionBox.setFromObject(node.object);
     }
+    // The fog follows the zoom, so it only ever softens what is far behind the subject.
+    const fog = this.scene.fog as THREE.Fog | null;
+    if (fog) {
+      const distance = this.camera.position.distanceTo(this.orbit.target);
+      fog.near = Math.max(10, distance * 2);
+      fog.far = fog.near + Math.max(30, distance * 4);
+    }
     const start = performance.now();
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
     this.viewHelper.render(this.renderer);
     perfStats.report({ renderMs: performance.now() - start });
   };
+}
+
+/** The studio backdrop behind captured images, matching the 3D view's background. */
+function paintBackdrop(context: CanvasRenderingContext2D, width: number, height: number): void {
+  const gradient = context.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, BACKDROP_TOP);
+  gradient.addColorStop(1, BACKDROP_BOTTOM);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
 }
