@@ -1,0 +1,31 @@
+
+> forgex-3d@0.2.0 test
+> vitest run
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mD:/a/forgex-3d/forgex-3d[39m
+
+ [32m✓[39m src/core/sketch/sketch.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 76[2mms[22m[39m
+ [32m✓[39m src/core/project/projectFile.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 81[2mms[22m[39m
+ [32m✓[39m src/core/geometry/constructionGraph.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+ [32m✓[39m src/core/editor/editorStore.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m src/core/automation/tools.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 693[2mms[22m[39m
+   [33m[2m✓[22m[39m car modelling tools[2m > [22mshares parts between projects through My Parts [33m 455[2mms[22m[39m
+ [32m✓[39m src/core/sketch/edit.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/core/geometry/cubeTest.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/core/geometry/modifiers.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m mcp/server.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 268[2mms[22m[39m
+ [32m✓[39m src/core/library/libraryPart.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m src/core/ai/claudeConfig.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/core/math/transform.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/core/automation/mcpTools.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/app/commands.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/core/sketch/body.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 1499[2mms[22m[39m
+   [33m[2m✓[22m[39m car templates[2m > [22mbuilds the supercar as closed, editable parts and saves it [33m 623[2mms[22m[39m
+   [33m[2m✓[22m[39m car templates[2m > [22mbuilds the saloon as closed, editable parts and saves it [33m 598[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m15 passed[39m[22m[90m (15)[39m
+[2m      Tests [22m [1m[32m148 passed[39m[22m[90m (148)[39m
+[2m   Start at [22m 23:38:18
+[2m   Duration [22m 3.45s[2m (transform 798ms, setup 0ms, collect 2.16s, tests 2.83s, environment 4ms, prepare 1.72s)[22m
+

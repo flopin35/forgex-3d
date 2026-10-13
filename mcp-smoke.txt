@@ -1,0 +1,5 @@
+  relay: [forgex-mcp] Waiting for the FORGEX 3D app on 127.0.0.1:47833.
+initialize: FORGEX 3D 0.2.0, protocol 2025-06-18
+tools/list: 36 tools
+get_status (app linked): Connected to the open FORGEX 3D app; changes appear live in its viewport and in its undo history. Project "Untitled" is not saved to disk yet, with 0 objects.
+  relay: [forgex-mcp] The AI app closed the connection.
