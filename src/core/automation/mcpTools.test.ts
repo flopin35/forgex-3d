@@ -15,6 +15,7 @@ describe('built-in MCP relay tool list', () => {
   it('matches the tool definitions', () => {
     const expected = `${JSON.stringify({ instructions: SERVER_INSTRUCTIONS, tools: TOOL_SPECS }, null, 1)}\n`;
     if (process.env.UPDATE_MCP_TOOLS === '1') writeFileSync(FILE, expected);
-    expect(readFileSync(FILE, 'utf8')).toBe(expected);
+    // Line endings are not part of the comparison (Windows checkouts may turn them into CRLF).
+    expect(readFileSync(FILE, 'utf8').replace(/\r\n/g, '\n')).toBe(expected);
   });
 });

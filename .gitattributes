@@ -1,0 +1,3 @@
+# Generated files are compared byte for byte in tests and CI, so they keep LF line endings everywhere.
+src-tauri/mcp-tools.json text eol=lf
+mcp/forgex-mcp.bundle.cjs text eol=lf
