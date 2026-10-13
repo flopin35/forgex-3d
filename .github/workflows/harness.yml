@@ -1,0 +1,30 @@
+name: Harness deps
+# Temporary helper: installs node_modules on Linux and stores them on the harness-deps branch.
+on:
+  push:
+    branches: [harness]
+permissions:
+  contents: write
+jobs:
+  deps:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - name: Pack node_modules
+        run: |
+          rm -rf node_modules/@tauri-apps/cli node_modules/@tauri-apps/cli-*
+          mkdir -p "$RUNNER_TEMP/out"
+          tar czf "$RUNNER_TEMP/nm.tgz" node_modules
+          split -b 90m "$RUNNER_TEMP/nm.tgz" "$RUNNER_TEMP/out/nm.tgz.part-"
+          ls -la "$RUNNER_TEMP/out"
+          cd "$RUNNER_TEMP/out"
+          git init -q -b harness-deps
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -q -m "node_modules for ${{ github.sha }}"
+          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" harness-deps
